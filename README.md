@@ -13,7 +13,10 @@ It connects multiple servers into one seamless network, enabling load balancing,
 
 ---
 
+**SiteLink** is during testing phase, if you want to help testing visit discord https://discord.gg/Sva8TaCR7Q
 
+
+---
 
 > 🧱 *SiteLink — bridging SCP:SL servers into one connected network.*
 
