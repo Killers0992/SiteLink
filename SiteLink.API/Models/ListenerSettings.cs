@@ -34,7 +34,7 @@ public class ListenerSettings
     /// Clients must match this version to connect successfully.
     /// </summary>
     [Description("The SCP:SL game version supported by this listener.")]
-    public string GameVersion { get; set; } = "14.1.3";
+    public string GameVersion { get; set; } = SiteLinkAPI.GameVersion;
 
     /// <summary>
     /// A list of server names (as defined in <see cref="ServerSettings"/>) that this listener
