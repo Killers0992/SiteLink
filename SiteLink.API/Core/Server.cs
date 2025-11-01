@@ -40,25 +40,38 @@ public class Server
         return null;
     }
 
-    public string Name { get; }
-    public string IpAddress { get; }
-    public int Port { get; }
+    public string Name => Settings.Name;
+    public string DisplayName => Settings.DisplayName;
+    public string IpAddress => Settings.Address;
+    public int Port => Settings.Port;
+    public bool ForwardIpAddress => Settings.ForwardIpAddress;
 
     public bool IsSimulated { get; private set; }
-    public bool ForwardIpAddress { get; private set; }
 
     public string Tag => $"[(f=yellow){Name.ToLower()}(f=white)]";
 
     public List<Client> Clients { get; } = new List<Client>();
+    public int ClientsCount => Clients.Count;
+    public int MaxClientsCount => Settings.MaxClients;
 
-    public Server(string name, string ip, int port, bool isSimulated, bool forwardIpAddress)
+    public ServerSettings Settings { get; }
+
+    public Server(ServerSettings settings = null, string name = null, string ip = null, int? port = null, bool? isSimulated = null, bool? forwardIpAddress = null)
     {
-        Name = name;
-        IpAddress = ip;
-        Port = port;
+        if (settings == null)
+        {
+            settings = new ServerSettings()
+            {
+                Name = name ?? "Unknown",
+                Address = ip ?? "127.0.0.1",
+                Port = port ?? 7777,
+                ForwardIpAddress = forwardIpAddress ?? false,
+            };
 
-        IsSimulated = isSimulated;
-        ForwardIpAddress = forwardIpAddress;
+            IsSimulated = isSimulated ?? false;
+        }
+
+        Settings = settings;
 
         SiteLinkLogger.Info($"{Tag} Server registered (f=green){IpAddress}:{Port}(f=white)");
     }

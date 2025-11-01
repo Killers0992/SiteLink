@@ -26,7 +26,7 @@ public class RemoteServer : Server
                     if (target == null)
                         continue;
 
-                    settings.Add(new SSButton(id, target.Name, "Connect"));
+                    settings.Add(new SSButton(id, target.DisplayName, "Connect"));
                     _servers.Add(id, target.Name);
                     id++;
                 }
@@ -37,7 +37,7 @@ public class RemoteServer : Server
         }
     }
 
-    public RemoteServer(string name, string ip, int port, bool isSimulated, bool forwardIpAddress) : base(name, ip, port, isSimulated, forwardIpAddress) { }
+    public RemoteServer(ServerSettings settings) : base(settings) { }
 
     public override void OnClientSpawned(Client client) => client.SendServerSpecificEntries(ServerSettings);
     public override void OnClientSSSReponse(Client client, int id)

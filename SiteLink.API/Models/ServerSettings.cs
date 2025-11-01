@@ -34,6 +34,12 @@ public class ServerSettings
     public int Port { get; set; } = 7778;
 
     /// <summary>
+    /// The maximum number of clients that can connect to this backend server.
+    /// </summary>
+    [Description("Maximum number of players that can connect to this server.")]
+    public int MaxClients { get; set; } = 25;
+
+    /// <summary>
     /// Determines whether the proxy should forward the real player IP address to the backend server.
     /// </summary>
     [Description("If true, forwards the player's real IP address to the backend server.")]

@@ -6,7 +6,7 @@ namespace Lobby;
 
 public class LobbyServer : Server
 {
-    public LobbyServer() : base("Lobby", "-lobby-", 7777, true, false) { }
+    public LobbyServer() : base(null, "Lobby", "-lobby-", 7777, true, false) { }
 
     public override bool OnClientConnecting(Client client) => true;
     public override void OnClientConnected(Client client) => client.SendToScene("Facility");

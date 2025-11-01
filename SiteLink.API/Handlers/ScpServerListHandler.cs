@@ -181,13 +181,28 @@ public class ScpServerListHandler
             listener.ServerListUpdate = listener.ForceServerListUpdate || listener.ServerListCycle == 10;
 
             string playersStr = $"{listener.ClientById.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
+
+            if (string.IsNullOrEmpty(listener.Settings.ServerList.TakePlayerCountFromServer))
+            {
+                Server targetServer = Server.Get<Server>(name: listener.Settings.ServerList.TakePlayerCountFromServer);
+
+                if (targetServer == null)
+                {
+                    SiteLinkLogger.Warn($"{listener.Tag} Failed to bind player count from server '{listener.Settings.ServerList.TakePlayerCountFromServer}' because server does not exist!");
+                }
+                else
+                {
+                    playersStr = $"{targetServer.ClientsCount}/{targetServer.MaxClientsCount}";
+                }
+            }
+
             var updateData = BuildUpdateData(listener, playersStr);
 
             bool result = await SendDataAsync(listener, updateData);
 
             if (result && !_verifyNotice)
             {
-                SiteLinkLogger.Info($"Server {listener.PublicAddress}:{listener.ListenPort} is visible on list!");
+                SiteLinkLogger.Info($"{listener.Tag} Server {listener.PublicAddress}:{listener.ListenPort} should be visible on serverlist!");
                 _verifyNotice = true;
             }
 
@@ -212,8 +227,6 @@ public class ScpServerListHandler
         {
             using var response = await server.Http.PostAsync("https://api.scpslgame.com/v4/authenticator.php", content, _cancellationToken);
             var responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
-
-            SiteLinkLogger.Info(responseText);
 
             return responseText.StartsWith("{\"")
                 ? await ProcessResponseAsync(server, responseText)
