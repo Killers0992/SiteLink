@@ -182,7 +182,7 @@ public class ScpServerListHandler
 
             string playersStr = $"{listener.ClientById.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
 
-            if (string.IsNullOrEmpty(listener.Settings.ServerList.TakePlayerCountFromServer))
+            if (!string.IsNullOrEmpty(listener.Settings.ServerList.TakePlayerCountFromServer))
             {
                 Server targetServer = Server.Get<Server>(name: listener.Settings.ServerList.TakePlayerCountFromServer);
 
@@ -376,7 +376,7 @@ public class ScpServerListHandler
         {
             baseData["update"] = "1";
             baseData["gameVersion"] = listener.Settings.GameVersion;
-            baseData["info"] = listener.Settings.Name.Replace('+', '-') + $"<color=#00000000><size=1>SiteLink v{SiteLinkAPI.Version}</size></color>".Base64Encode();
+            baseData["info"] = (listener.Settings.ServerList.DisplayName.Replace('+', '-') + $"<color=#00000000><size=1>SiteLink v{SiteLinkAPI.Version}</size></color>").Base64Encode();
             baseData["pastebin"] = listener.Settings.ServerList.Pastebin;
             baseData["modded"] = "True";
             baseData["emailSet"] = "True";
