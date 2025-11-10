@@ -2,10 +2,8 @@
 
 namespace SiteLink.API.Structs;
 
-public struct PublicKey
+public struct PublicKey : IJsonSerializable
 {
-    public static AsymmetricKeyParameter CurrentKey;
-
     public PublicKey(string key, string signature, string credits)
     {
         this.Key = key;

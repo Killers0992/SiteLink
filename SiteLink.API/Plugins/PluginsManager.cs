@@ -1,4 +1,6 @@
-﻿namespace SiteLink.API.Plugins;
+﻿using System.Reflection.Metadata;
+
+namespace SiteLink.API.Plugins;
 
 public static class PluginsManager
 {
@@ -118,9 +120,9 @@ public static class PluginsManager
         if (NameToAssembly.TryGetValue(args.Name, out Assembly assembly))
             return assembly;
 
-        //AssemblyNameInfo nameInfo = new AssemblyNameInfo(args.Name);
+        AssemblyNameInfo nameInfo = new AssemblyNameInfo(args.Name);
 
-        //Console.WriteLine(nameInfo.Version);
+        Console.WriteLine(nameInfo.Version);
         return null;
     }
 }

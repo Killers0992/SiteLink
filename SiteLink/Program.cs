@@ -19,9 +19,11 @@ builder.Logging.SetMinimumLevel(LogLevel.None);
 builder.Services.AddHostedService<LoggingService>();
 builder.Services.AddHostedService<ListenersService>();
 builder.Services.AddHostedService<ListService>();
-builder.Services.AddHostedService<CommandsService>();
 
 SiteLinkAPI.Initialize(builder.Services);
+
+builder.Services.AddHostedService<CommandsService>();
+
 
 IHost host = builder.Build();
 

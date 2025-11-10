@@ -1,5 +1,7 @@
-﻿using Newtonsoft.Json;
+﻿using GameCore;
+using Newtonsoft.Json;
 using Org.BouncyCastle.Crypto;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace SiteLink.API.Handlers;
 
@@ -8,10 +10,24 @@ namespace SiteLink.API.Handlers;
 /// </summary>
 public class ScpServerListHandler
 {
+    public const string CentralSubdomain = "gra2";
+
+    public const string Domain = "scpslgame.com";
+
+    public const string ApiVersion = "v5";
+
+    public static string StandardUrl => $"https://{CentralSubdomain}.{Domain}/";
+    public static string MasterUrl => $"https://api.{Domain}/";
+
+    public static string PublicKeyUrl => $"{StandardUrl}{ApiVersion}/publickey.php";
+    public static string AuthenticatorUrl => $"{MasterUrl}{ApiVersion}/authenticator.php";
+    public static string ContactAddressUrl => $"{MasterUrl}{ApiVersion}/contactaddress.php";
+
     private readonly HttpClient _client;
     private readonly CancellationToken _cancellationToken;
 
     public static string Password { get; private set; }
+
     public static AsymmetricKeyParameter PublicKey { get; private set; }
 
     private string _verKey;
@@ -65,13 +81,26 @@ public class ScpServerListHandler
     {
         try
         {
-            string cached = CentralServerKeyCache.ReadCache();
+            string cached = ScpCentralServer.ReadCache();
+
+            string cacheHash = string.Empty;
+
+            if (!string.IsNullOrEmpty(cached))
+            {
+                ServerConsole.PublicKey = ECDSA.PublicKeyFromString(cached);
+                cacheHash = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(ServerConsole.PublicKey)));
+
+                SiteLinkLogger.Info("Loaded central server public key from cache.");
+                SiteLinkLogger.Info("SHA256 of public key: " + cacheHash);
+            }
 
             if (!string.IsNullOrEmpty(cached))
             {
                 PublicKey = ECDSA.PublicKeyFromString(cached);
                 _cachedHash = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(PublicKey)));
             }
+
+            SiteLinkLogger.Info("Downloading public key from central server...");
 
             await RefreshPublicKeyAsync();
         }
@@ -81,18 +110,48 @@ public class ScpServerListHandler
         }
     }
 
-    public async Task RefreshPublicKeyAsync()
+    public async Task RefreshPublicKeyOnce()
     {
         try
         {
-            HttpResponseMessage response = await _client.GetAsync("https://api.scpslgame.com/v4/publickey.php?major=14", _cancellationToken);
+            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersionParsed.Major}", _cancellationToken);
             string responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
 
             PublicKey publicKeyResponse = JsonConvert.DeserializeObject<PublicKey>(responseText);
 
             if (!ECDSA.Verify(publicKeyResponse.Key, publicKeyResponse.Signature, ScpCentralServer.MasterKey))
             {
-                SiteLinkLogger.Error("Public key signature invalid.", nameof(ScpServerListHandler));
+                SiteLinkLogger.Info("Can't refresh central server public key - invalid signature!");
+            }
+            else
+            {
+                ServerConsole.PublicKey = ECDSA.PublicKeyFromString(publicKeyResponse.Key);
+                string str = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(ServerConsole.PublicKey)));
+
+                SiteLinkLogger.Info("Downloaded public key from central server.");
+                SiteLinkLogger.Info("SHA256 of public key: " + str);
+
+                CentralServerKeyCache.SaveCache(publicKeyResponse.Key, publicKeyResponse.Signature);
+            }
+        }
+        catch (Exception ex)
+        {
+
+        }
+    }
+
+    public async Task RefreshPublicKeyAsync()
+    {
+        try
+        {
+            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersionParsed.Major}", _cancellationToken);
+            string responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
+
+            PublicKey publicKeyResponse = JsonConvert.DeserializeObject<PublicKey>(responseText);
+
+            if (!ECDSA.Verify(publicKeyResponse.Key, publicKeyResponse.Signature, ScpCentralServer.MasterKey))
+            {
+                SiteLinkLogger.Error("Public key signature invalid. main", nameof(ScpServerListHandler));
                 return;
             }
 
@@ -108,6 +167,10 @@ public class ScpServerListHandler
                     ScpCentralServer.SaveCache(publicKeyResponse.Key, publicKeyResponse.Signature);
                     SiteLinkLogger.Info("Central server public key refreshed.", nameof(ScpServerListHandler));
                 }
+            }
+            else
+            {
+                SiteLinkLogger.Info("Refreshed public key of central server - key hash not changed.", nameof(ScpServerListHandler));
             }
         }
         catch (Exception ex)
@@ -180,7 +243,7 @@ public class ScpServerListHandler
 
             listener.ServerListUpdate = listener.ForceServerListUpdate || listener.ServerListCycle == 10;
 
-            string playersStr = $"{listener.ClientById.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
+            string playersStr = $"{listener.ConnectedClients.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
 
             if (!string.IsNullOrEmpty(listener.Settings.ServerList.TakePlayerCountFromServer))
             {
@@ -225,7 +288,7 @@ public class ScpServerListHandler
 
         try
         {
-            using var response = await server.Http.PostAsync("https://api.scpslgame.com/v4/authenticator.php", content, _cancellationToken);
+            using var response = await server.Http.PostAsync(AuthenticatorUrl, content, _cancellationToken);
             var responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
 
             return responseText.StartsWith("{\"")
@@ -327,6 +390,10 @@ public class ScpServerListHandler
 
         switch (action.ToUpperInvariant())
         {
+            case "REFRESHKEY":
+                await RefreshPublicKeyOnce();
+                break;
+
             case "UPDATEDATA":
                 listener.ForceServerListUpdate = true;
                 break;
@@ -352,9 +419,8 @@ public class ScpServerListHandler
 
         try
         {
-            using var response = await listener.Http.PostAsync("https://api.scpslgame.com/v4/contactaddress.php", new FormUrlEncodedContent(data), _cancellationToken);
+            using var response = await listener.Http.PostAsync(ContactAddressUrl, new FormUrlEncodedContent(data), _cancellationToken);
             string text = await response.Content.ReadAsStringAsync(_cancellationToken);
-            Console.WriteLine(text);
         }
         catch (Exception ex)
         {
@@ -406,7 +472,7 @@ public class ScpServerListHandler
             data.Add("passcode", Password);
 
         using FormUrlEncodedContent content = new FormUrlEncodedContent(data);
-        using HttpResponseMessage response = await listener.Http.PostAsync($"https://api.scpslgame.com/centralcommands/{cmd}.php", content);
+        using HttpResponseMessage response = await listener.Http.PostAsync($"{MasterUrl}centralcommands/{cmd}.php", content);
         string responseText = await response.Content.ReadAsStringAsync();
 
         SiteLinkLogger.Info($"[(f=green){cmd}(f=white)] {responseText}", $"central");

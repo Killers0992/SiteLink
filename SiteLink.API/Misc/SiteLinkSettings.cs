@@ -87,4 +87,13 @@ public class SiteLinkSettings
     /// </summary>
     [Description("List of server names displayed in the in-game server selector menu.")]
     public string[] ServersInSelector { get; set; } = ["default"];
+
+    /// <summary>
+    /// The number of times the system will attempt to reconnect to the backend server
+    /// when a temporary disconnection occurs (e.g., during restarts or map changes).
+    /// If the server cannot be reached after this many attempts, the proxy will connect
+    /// the player to a fallback server (if specified) or disconnect them from the proxy.
+    /// </summary>
+    [Description("Number of automatic reconnect attempts before redirecting to a fallback server or disconnecting.")]
+    public int MaximumReconnectAttempts { get; set; } = 5;
 }

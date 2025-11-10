@@ -3,7 +3,6 @@ using PlayerRoles;
 using PlayerRoles.FirstPersonControl;
 using RelativePositioning;
 using UserSettings.ServerSpecific;
-using SiteLink.API.Networking.Common;
 using SiteLink.Core;
 using SiteLink.Networking.Batchers;
 using static PlayerStatsSystem.SyncedStatMessages;
@@ -15,6 +14,21 @@ namespace SiteLink.API.Networking;
 /// </summary>
 public class Client : IDisposable
 {
+    public static int TotalPlayersCount => Listener.ClientByUserId.Count;
+
+    public static bool TryGet(string userId, out Client client) => Listener.ClientByUserId.TryGetValue(userId, out client);
+    /// <summary>
+    /// Minimal vertical angle.
+    /// </summary>
+    public const float MinimumVer = -88f;
+
+    /// <summary>
+    /// Max vertical angle.
+    /// </summary>
+    public const float MaximumVer = 88f;
+
+    private const float FullAngle = 360;
+
     /// <summary>
     /// The inverse accuracy constant for position calculations.
     /// </summary>
@@ -133,6 +147,16 @@ public class Client : IDisposable
     }
 
     /// <summary>
+    /// Current horizontal rotation.
+    /// </summary>
+    public float HorizontalRotation { get; private set; }
+
+    /// <summary>
+    /// Current vertical rotation.
+    /// </summary>
+    public float VerticalRotation { get; private set; }
+
+    /// <summary>
     /// Gets or sets the main connection for this client.
     /// </summary>
     public Connection Connection
@@ -226,6 +250,8 @@ public class Client : IDisposable
         Request = request;
         PreAuth = preAuth;
 
+        Listener.RegisterClientInLookup(this);
+
         Listener.NotConnectedClients.Add(this);
     }
 
@@ -290,7 +316,7 @@ public class Client : IDisposable
             return;
 
         Peer = Request.Accept();
-        Listener.ClientById.Add(Peer.Id, this);
+        Listener.ConnectedClients.Add(Peer.Id, this);
 
         Request = null;
     }
@@ -303,8 +329,13 @@ public class Client : IDisposable
     /// <param name="message">An optional message for logging.</param>
     public bool Reconnect(string serverName, float timeOffset = 0f, string message = null)
     {
-        if (_reconnectAttempt > 5)
+        if (_reconnectAttempt >= SiteLinkSettings.Singleton.MaximumReconnectAttempts)
+        {
+            SiteLinkLogger.Info($"{Tag} Reached max attemps -> disconnect ");
+            //Connect(Server.Settings.FallbackServers);
+            LastResponse = null;
             return false;
+        }
 
         SiteLinkLogger.Info($"{Tag} Server (f=yellow){Server.Name}(f=white) {message}, reconnect in (f=yellow){timeOffset}(f=white) seconds", "Client");
         ReconnectAttempt = DateTime.Now.AddSeconds(timeOffset);
@@ -536,6 +567,9 @@ public class Client : IDisposable
                     _rotH = 0;
                     _rotV = 0;
                 }
+                
+                HorizontalRotation = Mathf.Lerp(0, FullAngle, _rotH / (float)ushort.MaxValue);
+                VerticalRotation = Mathf.Lerp(MinimumVer, MaximumVer, _rotV / (float)ushort.MaxValue);
                 break;
 
             case NetworkMessages.SSSClientResponse:
@@ -565,6 +599,10 @@ public class Client : IDisposable
                 {
                     spawnedObject.OnReceiveCommand(commandMessage.componentIndex, commandMessage.functionHash, commandMessage.payload);
                 }
+                else if (commandMessage.netId == NetworkIdentityId && Object != null)
+                {
+                    Object.OnReceiveCommand(commandMessage.componentIndex, commandMessage.functionHash, commandMessage.payload);                    
+                }   
                 break;
         }
 
@@ -1063,7 +1101,9 @@ public class Client : IDisposable
         BackupConnection.Dispose();
 
         if (Peer != null)
-            Listener.ClientById.Remove(Peer.Id);
+            Listener.ConnectedClients.Remove(Peer.Id);
+
+        Listener.UnregisterClientInLookup(this);
 
         IsDisposing = true;
     }

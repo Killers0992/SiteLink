@@ -115,6 +115,7 @@ public struct PreAuth
             return false;
         }
 
+
         if (!reader.TryGetBool(out bool backwardCompatibility))
         {
             rejectForce = true;
@@ -133,6 +134,8 @@ public struct PreAuth
                 return false;
             }
         }
+
+        SiteLinkLogger.Info($"Ver {major}.{minor}.{revision}, backward {backwardCompatibility} {backwardRevision}");
 
         Version clientVersion = new Version(major, minor, revision);
 

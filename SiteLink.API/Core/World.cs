@@ -1,4 +1,6 @@
-﻿using SiteLink.API.Networking.Common;
+﻿using SiteLink.API.Events;
+using SiteLink.API.Events.Args;
+using SiteLink.API.Networking.Common;
 
 namespace SiteLink.API.Core;
 
@@ -157,8 +159,6 @@ public class World : IDisposable
         waypoint.WaypointToy.BoundsSize = new Vector3(100f, 100f, 100f);
         waypoint.WaypointToy.WaypointId = GetFreeWaypointId();
 
-        SiteLinkLogger.Info("Add waypoint " + waypoint.WaypointToy.WaypointId + " at " + position, "World");
-
         _lock.EnterWriteLock();
         try
         {
@@ -213,6 +213,8 @@ public class World : IDisposable
         
         SpawnObjectsForClient(client);
 
+        EventManager.Client.InvokeLoadedWorld(new ClientLoadedWorldEvent(client, this));
+
         return result;
     }
 
@@ -241,6 +243,8 @@ public class World : IDisposable
         if (GetClientsSnapshot().Count == 0 && DestroyOnEmpty)
             Dispose();
 
+        EventManager.Client.InvokeUnloadedWorld(new ClientUnloadedWorldEvent(client, this));
+
         return true;
     }
 
@@ -255,7 +259,7 @@ public class World : IDisposable
             foreach (var obj in Objects)
             {
                 // Spawn objects for client.
-                SiteLinkLogger.Info($"Spawn {obj.Value.GetType().Name} for {client.PreAuth.UserId}");
+                //SiteLinkLogger.Info($"Spawn {obj.Value.GetType().Name} for {client.PreAuth.UserId}");
                 obj.Value.SpawnWithPayload(client);
             }
         }
@@ -263,6 +267,7 @@ public class World : IDisposable
         {
             _lock.ExitReadLock();
         }
+
         // Call outside the lock to avoid recursion
         OnObjectsSpawned(client);
     }

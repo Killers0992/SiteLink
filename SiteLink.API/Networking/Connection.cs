@@ -1,4 +1,7 @@
-﻿namespace SiteLink.Core;
+﻿using SiteLink.API.Events;
+using SiteLink.API.Events.Args;
+
+namespace SiteLink.Core;
 
 /// <summary>
 /// Represents a network connection for a client, handling communication and state.
@@ -133,7 +136,6 @@ public class Connection : IDisposable
         return true;
     }
 
-
     /// <summary>
     /// Attempts to reconnect to the current server using the provided connection data.
     /// </summary>
@@ -162,6 +164,8 @@ public class Connection : IDisposable
 
     void OnDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
+        SiteLinkLogger.Info("Disconnected " + disconnectInfo.Reason);
+
         IsConnecting = false;
 
         switch (disconnectInfo.Reason)
@@ -192,6 +196,8 @@ public class Connection : IDisposable
                 RejectionReason reason = (RejectionReason)lastRejectionReason;
 
                 bool cancel = false;
+
+                SiteLinkLogger.Info(reason);
 
                 switch (reason)
                 {
@@ -252,7 +258,8 @@ public class Connection : IDisposable
 
             case DisconnectReason.Timeout:
             case DisconnectReason.PeerNotFound:
-                SiteLinkLogger.Info($"{Client.Tag} Timeout!", "Client");
+                SiteLinkLogger.Info($"{Client.Tag} Server timeout!", "Client");
+                Client.Connect("lobby");
                 return;
 
             case DisconnectReason.RemoteConnectionClose:
@@ -288,24 +295,31 @@ public class Connection : IDisposable
 
     void AcceptConnection()
     {
+        //SiteLinkLogger.Info($"{Client.Tag} Set client as connected");
+
         IsConnecting = false;
         Client.AcceptConnection();
 
+        EventManager.Client.InvokeJoinedServer(new ClientJoinedServerEvent(Client, Server));
+
         Client.Connection = this;
+        Client.LastResponse = null;
+
+        //SiteLinkLogger.Info($"{Client.Tag} Set last response to null to prevent issues");
 
         if (Client.Object != null)
         {
             Client.SetRole(PlayerRoles.RoleTypeId.Destroyed);
 
-            SiteLinkLogger.Info("Send FastRoundRestart packet");
             Client.FastRoundrestart();
-            SiteLinkLogger.Info("Send NotReady packet");
             Client.NotReady();
         }
     }
 
     void OnConnected(NetPeer peer)
     {
+        SiteLinkLogger.Info("Connected");
+
         AcceptConnection();
         Server.InternalClientConnected(Client);
     }

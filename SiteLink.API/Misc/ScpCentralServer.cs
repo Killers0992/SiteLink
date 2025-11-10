@@ -5,6 +5,15 @@ namespace SiteLink.API.Misc;
 
 public static class ScpCentralServer
 {
+    static AsymmetricKeyParameter _masterKey;
+
+    private const string MasterPublicKey = @"-----BEGIN PUBLIC KEY-----
+MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAbL0YvrhVB2meqCq5XzjAJD8Ii0hb
+BHdIQ587N583cP8twjDhcITjZhBHJPJDuA85XdpgG04HwT0SD3WcAvoQXBUAUsG1
+LS9TR4urHwfgfroq4tH2HAQE6ZxFZeIFSglLO8nxySim4yKBj96HLG624lzKvzoD
+Id+GOwjcd3XskOq9Dwc=
+-----END PUBLIC KEY-----";
+
     public static string ReadCache()
     {
         string result;
@@ -92,5 +101,16 @@ public static class ScpCentralServer
         }
     }
 
-    public static readonly AsymmetricKeyParameter MasterKey = Cryptography.ECDSA.PublicKeyFromString("-----BEGIN PUBLIC KEY-----\r\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAbL0YvrhVB2meqCq5XzjAJD8Ii0hb\r\nBHdIQ587N583cP8twjDhcITjZhBHJPJDuA85XdpgG04HwT0SD3WcAvoQXBUAUsG1\r\nLS9TR4urHwfgfroq4tH2HAQE6ZxFZeIFSglLO8nxySim4yKBj96HLG624lzKvzoD\r\nId+GOwjcd3XskOq9Dwc=\r\n-----END PUBLIC KEY-----");
+    public static AsymmetricKeyParameter MasterKey
+    {
+        get
+        {
+            if (_masterKey == null)
+            {
+                _masterKey = ECDSA.PublicKeyFromString(MasterPublicKey);
+            }
+
+            return _masterKey;
+        }
+    }
 }

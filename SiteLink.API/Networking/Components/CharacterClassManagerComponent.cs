@@ -48,6 +48,16 @@ public class CharacterClassManagerComponent : BehaviourComponent
         this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
+    public override void OnReceiveCommand(ushort functionHash, ArraySegment<byte> payload = default)
+    {
+        switch (functionHash)
+        {
+            case NetworkMessages.CharacterClassManager.Commands.ConfirmDisconnect:
+                Object.Owner.Disconnect();
+                break;
+        }
+    }
+
     void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
         if (forceAll)

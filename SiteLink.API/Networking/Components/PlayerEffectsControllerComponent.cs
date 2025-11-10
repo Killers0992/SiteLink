@@ -5,7 +5,10 @@ namespace SiteLink.API.Networking.Components;
 public class PlayerEffectsControllerComponent : BehaviourComponent
 {
 
-    public PlayerEffectsControllerComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
+    public PlayerEffectsControllerComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>()
+    {
+        Count = 200,
+    })
     {
         //
         this.OnSerializeSyncVars += SerializeSyncVars;

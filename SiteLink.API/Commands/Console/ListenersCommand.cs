@@ -12,7 +12,7 @@ public class ListenersCommand
 
         foreach (Listener listener in Listener.List)
         {
-            sb.AppendLine($" - (f=cyan){listener.ListenAddress}:{listener.ListenPort}(f=white) [ (f=green){listener.ClientById.Count}(f=white) ] ((f=darkcyan){listener.Name}(f=white))");
+            sb.AppendLine($" - (f=cyan){listener.ListenAddress}:{listener.ListenPort}(f=white) [ (f=green){listener.ConnectedClients.Count}(f=white) ] ((f=darkcyan){listener.Name}(f=white))");
         }
 
         SiteLinkLogger.Info(sb.ToString(), "listeners");

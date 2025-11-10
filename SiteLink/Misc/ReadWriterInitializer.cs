@@ -13,7 +13,6 @@ public class ReadWriterInitializer
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                // Skip dynamic assemblies like "System.Reflection.Emit"
                 if (assembly.IsDynamic)
                     continue;
 
@@ -39,7 +38,7 @@ public class ReadWriterInitializer
                 }
             }
 
-            SiteLinkLogger.Error($"Initialized {count} read/writer method(s).", "InitReadWriters");
+            SiteLinkLogger.Info($"Initialized {count} read/writer method(s).", "InitReadWriters");
         }
         catch (Exception ex)
         {

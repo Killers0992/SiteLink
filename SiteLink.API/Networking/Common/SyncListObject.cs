@@ -1,10 +1,22 @@
-﻿namespace SiteLink.API.Networking.Common;
+﻿using Mirror;
+
+namespace SiteLink.API.Networking.Common;
 
 public class SyncListObject<T> : SyncObject
 {
+    public uint Count = 0;
+
     public override void OnSerializeAll(NetworkWriter writer)
     {
-        writer.WriteUInt(0);
+        writer.WriteUInt(Count);
+
+        for (int i = 0; i < Count; i++)
+        {
+            T type = (T)Activator.CreateInstance(typeof(T));
+
+            writer.Write(type);
+        }
+
         writer.WriteUInt(0);
     }
 

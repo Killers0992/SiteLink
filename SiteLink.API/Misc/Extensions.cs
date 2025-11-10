@@ -1,6 +1,8 @@
-﻿using System.Buffers;
+﻿using SiteLink.API.Events;
+using System.Buffers;
 using System.Text;
 using System.Text.RegularExpressions;
+using static SiteLink.API.Events.EventManager;
 
 namespace SiteLink.API.Misc;
 
@@ -125,4 +127,21 @@ public static class Extensions
         return result;
     }
 
+
+    public static void InvokeWithExceptionHandler<TEvent>(this CustomEventHandler<TEvent> ev, TEvent arguments) where TEvent : BaseEvent
+    {
+        foreach (var invoker in ev.GetInvocationList())
+        {
+            if (invoker is not CustomEventHandler<TEvent> customInvoker) continue;
+
+            try
+            {
+                customInvoker.Invoke(arguments);
+            }
+            catch (Exception ex)
+            {
+                SiteLinkLogger.Error($"Exception while invoking event (f=green){ev.GetType().Name}(f=red) {ex}", "EventManager");
+            }
+        }
+    }
 }

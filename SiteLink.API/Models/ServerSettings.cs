@@ -44,4 +44,10 @@ public class ServerSettings
     /// </summary>
     [Description("If true, forwards the player's real IP address to the backend server.")]
     public bool ForwardIpAddress { get; set; } = false;
+
+    /// <summary>
+    /// A list of fallback server names that players should be redirected to if this server is unavailable.
+    /// </summary>
+    [Description("List of fallback servers used when this server is unavailable.")]
+    public string[] FallbackServers { get; set; } = Array.Empty<string>();
 }

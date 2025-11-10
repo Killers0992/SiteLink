@@ -4,6 +4,9 @@ public class Listener
 {
     public const int PoolingDelayMs = 10;
 
+    public static Dictionary<string, Client> ClientByUserId = new Dictionary<string, Client>();
+    //public static Dictionary<string, Client> ClientByName = new Dictionary<string, Client>();
+
     public static List<Listener> List => ListenersByName.Values.ToList();
     public static Dictionary<string, Listener> ListenersByName { get; } = new Dictionary<string, Listener>();
 
@@ -12,6 +15,20 @@ public class Listener
     public static void Register(Listener listener)
     {
         ListenersByName.Add(listener.Name, listener);
+    }
+
+    public static void RegisterClientInLookup(Client client)
+    {
+        if (ClientByUserId.ContainsKey(client.PreAuth.UserId))
+            ClientByUserId[client.PreAuth.UserId] = client;
+        else
+            ClientByUserId.Add(client.PreAuth.UserId, client);
+    }
+
+    public static void UnregisterClientInLookup(Client client)
+    {
+        if (ClientByUserId.ContainsKey(client.PreAuth.UserId))
+            ClientByUserId.Remove(client.PreAuth.UserId);
     }
 
     private string _version;
@@ -50,7 +67,7 @@ public class Listener
     }
 
     public List<Client> NotConnectedClients = new List<Client>();
-    public Dictionary<int, Client> ClientById = new Dictionary<int, Client>();
+    public Dictionary<int, Client> ConnectedClients = new Dictionary<int, Client>();
 
     public string Tag => $"[(f=cyan){Name}(f=white)]";
 
@@ -104,7 +121,7 @@ public class Listener
 
         Task.Run(() => RunEventPolling(_token), _token);
 
-        SiteLinkLogger.Info($"{Tag} Listening on (f=green){ListenAddress}:{ListenPort}(f=white)", "Listener");
+        SiteLinkLogger.Info($"{Tag} Listening on (f=green){ListenAddress}:{ListenPort}(f=white) accepting clients with version (f=green){Settings.GameVersion}(f=white)", "Listener");
     }
 
     public async Task Initialize()
@@ -177,7 +194,7 @@ public class Listener
                 NotConnectedClients.Remove(_clientsToRemove.Dequeue());
             }
 
-            foreach (Client client in ClientById.Values)
+            foreach (Client client in ConnectedClients.Values)
             {
                 try
                 {
@@ -224,7 +241,7 @@ public class Listener
 
     void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
     {
-        if (!ClientById.TryGetValue(peer.Id, out Client client))
+        if (!ConnectedClients.TryGetValue(peer.Id, out Client client))
             return;
 
         byte[] bytes = reader.RawData;
@@ -239,7 +256,7 @@ public class Listener
 
     void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
-        if (!ClientById.TryGetValue(peer.Id, out Client client))
+        if (!ConnectedClients.TryGetValue(peer.Id, out Client client))
             return;
 
         OnClientDisconneted(client, disconnectInfo.Reason);

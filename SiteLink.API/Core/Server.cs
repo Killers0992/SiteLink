@@ -17,6 +17,8 @@ public class Server
         List.Add(server);
     }
 
+    public static bool TryGetByName(string name, out Server server) => RegisteredServers.TryGetValue($"{name.ToLower()}", out server);
+
     public static Server Get<TServer>(string name = null, string ip = null, int port = -1) where TServer : Server
     {
         if (!string.IsNullOrEmpty(ip))
