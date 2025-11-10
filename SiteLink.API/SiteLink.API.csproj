@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
 	
 	<PropertyGroup>
 		<Version>0.0.3</Version>
@@ -40,7 +40,6 @@
 			<HintPath>$(UNITY_REFERENCES)\UnityEngine.CoreModule.dll</HintPath>
 		</Reference>
 	</ItemGroup>
-
 
 	<ItemGroup>
 		<None Include="..\LICENSE.txt">
