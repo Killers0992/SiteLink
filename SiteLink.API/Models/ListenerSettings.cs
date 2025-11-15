@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using YamlDotNet.Serialization;
 
 namespace SiteLink.API.Models;
 
@@ -34,7 +35,7 @@ public class ListenerSettings
     /// Clients must match this version to connect successfully.
     /// </summary>
     [Description("The SCP:SL game version supported by this listener.")]
-    public string GameVersion { get; set; } = SiteLinkAPI.GameVersion;
+    public string GameVersion { get; set; } = "latest";
 
     /// <summary>
     /// A list of server names (as defined in <see cref="ServerSettings"/>) that this listener

@@ -10,7 +10,7 @@ namespace SiteLink.API.Handlers;
 /// </summary>
 public class ScpServerListHandler
 {
-    public const string CentralSubdomain = "gra2";
+    public const string CentralSubdomain = "api";
 
     public const string Domain = "scpslgame.com";
 
@@ -45,7 +45,7 @@ public class ScpServerListHandler
 
         _client = new HttpClient();
         _client.DefaultRequestHeaders.Add("User-Agent", "SCP SL");
-        _client.DefaultRequestHeaders.Add("Game-Version", SiteLinkAPI.GameVersion);
+        _client.DefaultRequestHeaders.Add("Game-Version", SiteLinkAPI.GameVersionText);
     }
 
     public async Task InitializeAsync()
@@ -90,8 +90,8 @@ public class ScpServerListHandler
                 ServerConsole.PublicKey = ECDSA.PublicKeyFromString(cached);
                 cacheHash = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(ServerConsole.PublicKey)));
 
-                SiteLinkLogger.Info("Loaded central server public key from cache.");
-                SiteLinkLogger.Info("SHA256 of public key: " + cacheHash);
+                SiteLinkLogger.Debug("Loaded central server public key from cache.");
+                SiteLinkLogger.Debug("SHA256 of public key: " + cacheHash);
             }
 
             if (!string.IsNullOrEmpty(cached))
@@ -100,7 +100,7 @@ public class ScpServerListHandler
                 _cachedHash = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(PublicKey)));
             }
 
-            SiteLinkLogger.Info("Downloading public key from central server...");
+            SiteLinkLogger.Debug("Downloading public key from central server...");
 
             await RefreshPublicKeyAsync();
         }
@@ -114,7 +114,7 @@ public class ScpServerListHandler
     {
         try
         {
-            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersionParsed.Major}", _cancellationToken);
+            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersion.Major}", _cancellationToken);
             string responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
 
             PublicKey publicKeyResponse = JsonConvert.DeserializeObject<PublicKey>(responseText);
@@ -144,7 +144,7 @@ public class ScpServerListHandler
     {
         try
         {
-            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersionParsed.Major}", _cancellationToken);
+            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersion.Major}", _cancellationToken);
             string responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
 
             PublicKey publicKeyResponse = JsonConvert.DeserializeObject<PublicKey>(responseText);
@@ -441,8 +441,8 @@ public class ScpServerListHandler
         if (listener.ServerListUpdate)
         {
             baseData["update"] = "1";
-            baseData["gameVersion"] = listener.Settings.GameVersion;
-            baseData["info"] = (listener.Settings.ServerList.DisplayName.Replace('+', '-') + $"<color=#00000000><size=1>SiteLink v{SiteLinkAPI.Version}</size></color>").Base64Encode();
+            baseData["gameVersion"] = listener.Settings.GameVersion.ParseVersion();
+            baseData["info"] = (listener.Settings.ServerList.DisplayName.Replace('+', '-') + $"<color=#00000000><size=1>SiteLink v{SiteLinkAPI.ApiVersionText}</size></color>").Base64Encode();
             baseData["pastebin"] = listener.Settings.ServerList.Pastebin;
             baseData["modded"] = "True";
             baseData["emailSet"] = "True";

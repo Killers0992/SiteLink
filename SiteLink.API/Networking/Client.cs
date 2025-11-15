@@ -2,9 +2,10 @@
 using PlayerRoles;
 using PlayerRoles.FirstPersonControl;
 using RelativePositioning;
-using UserSettings.ServerSpecific;
+using RoundRestarting;
 using SiteLink.Core;
 using SiteLink.Networking.Batchers;
+using UserSettings.ServerSpecific;
 using static PlayerStatsSystem.SyncedStatMessages;
 
 namespace SiteLink.API.Networking;
@@ -42,6 +43,7 @@ public class Client : IDisposable
     int _reconnectAttempt = 0;
     private World _world;
     private Connection _connection = new Connection();
+    private ActionScheduler _scheduler;
 
     /// <summary>
     /// Gets the network identity ID of this client.
@@ -62,6 +64,8 @@ public class Client : IDisposable
     /// Gets the server this client is connected to.
     /// </summary>
     public Server Server => Connection.Server;
+
+    public ActionScheduler Scheduler => _scheduler ??= new ActionScheduler(this);
 
     /// <summary>
     /// Gets or sets the world this client is currently in.
@@ -255,6 +259,10 @@ public class Client : IDisposable
         Listener.NotConnectedClients.Add(this);
     }
 
+    public void AddToActions(TimedAction action) => Scheduler.Add(action);
+
+    public void RemoveAction(string name) => Scheduler.Remove(name);
+
     /// <summary>
     /// Called when the client is connected to a server.
     /// </summary>
@@ -289,7 +297,7 @@ public class Client : IDisposable
     public void OnConnectedToServerInternal(Server server)
     {
         OnConnectedToServer(server);
-        SiteLinkLogger.Info($"{Tag} Connected.", "Client");
+        SiteLinkLogger.Info($"{Tag} Connected.");
     }
 
     /// <summary>
@@ -337,7 +345,6 @@ public class Client : IDisposable
             return false;
         }
 
-        SiteLinkLogger.Info($"{Tag} Server (f=yellow){Server.Name}(f=white) {message}, reconnect in (f=yellow){timeOffset}(f=white) seconds", "Client");
         ReconnectAttempt = DateTime.Now.AddSeconds(timeOffset);
         ReconnectTo = serverName;
         IsReconnecting = true;
@@ -352,10 +359,13 @@ public class Client : IDisposable
     /// </summary>
     public void PollEvents()
     {
+        Scheduler?.Update();
+
         if (IsReconnecting)
         {
             if (ReconnectAttempt < DateTime.Now)
             {
+                SiteLinkLogger.Info("Reconnect to " + ReconnectTo);
                 Connect(ReconnectTo);
                 IsReconnecting = false;
             }
@@ -632,11 +642,16 @@ public class Client : IDisposable
 
         switch (id)
         {
+            case NetworkMessages.ServerShutdownMessage:
+                return false;
+
             case NetworkMessages.RoundRestartMessage:
                 if (!Connection.IsConnected)
                     return false;
 
                 RoundRestartMessage restartMessage = RoundRestartMessageReaderWriter.ReadRoundRestartMessage(reader);
+
+                SiteLinkLogger.Info("Set last response to RoundRestart");
 
                 LastResponse = new RoundRestartResponse(restartMessage.Type, restartMessage.TimeOffset);
                 Connection.Disconnect();
@@ -649,6 +664,52 @@ public class Client : IDisposable
                 {
                     Server?.OnClientSpawned(this);
                     IsSpawned = true;
+                }
+                break;
+
+            case NetworkMessages.RpcMessage:
+                RpcMessage rpcMessage = new RpcMessage()
+                {
+                    netId = reader.ReadUInt(),
+                    componentIndex = reader.ReadByte(),
+                    functionHash = reader.ReadUShort(),
+                    payload = reader.ReadArraySegmentAndSize(),
+                };
+
+                if (rpcMessage.netId == NetworkIdentityId && Object != null)
+                {
+                    if (rpcMessage.componentIndex != 1)
+                        break;
+
+                    switch (rpcMessage.functionHash)
+                    {
+                        // System.Void CharacterClassManager::TargetSetDisconnectError(Mirror.NetworkConnection,System.String)
+                        case 55061:
+                            NetworkReader rpcReader = new NetworkReader(rpcMessage.payload);
+                            string reason = rpcReader.ReadString();
+
+                            Connection.Disconnect();
+
+                            AddToActions(
+                                new TimedAction(
+                                    "ReconnectSequence",
+                                    TimeSpan.Zero,
+                                    p => p.SendHint($"Kicked from server {Server.Name} with reason\n\n'{reason}'\n\nConnecting to fallback server...", 6),
+                                    null,
+                                    new TimedAction("ConnectToServer", TimeSpan.FromSeconds(6), p =>
+                                    {
+                                        if (Server.Settings.FallbackServers.Length == 0)
+                                        {
+                                            p.Disconnect($"Kicked from server {Server.Name} with reason\n\n'{reason}'\n\nTheres no fallback servers set for '{Server.Name}'");
+                                            return;
+                                        }
+
+                                        p.Connect(Server.Settings.FallbackServers);
+                                    }
+                                )
+                            ));
+                            return false;
+                    }
                 }
                 break;
 
@@ -696,21 +757,20 @@ public class Client : IDisposable
     /// <summary>
     /// The queue of server names to connect to.
     /// </summary>
-    public Queue<string> ServersToConnect = new Queue<string>();
+    public Queue<Server> ServersToConnect = new Queue<Server>();
 
     /// <summary>
     /// Attempts to connect to the next server in the queue.
     /// </summary>
     public void TakeServerAndTryConnect()
     {
-        if (!ServersToConnect.TryDequeue(out string serverName))
+        if (!ServersToConnect.TryDequeue(out Server server))
         {
             Disconnect("Failed to connect to any priority servers");
             return;
         }
 
-        Server target = Server.Get<Server>(name: serverName);
-        Connect(target);
+        Connect(server);
     }
 
     /// <summary>
@@ -736,9 +796,9 @@ public class Client : IDisposable
     /// <param name="servers">The server names.</param>
     public void Connect(string[] servers)
     {
-        ServersToConnect = new Queue<string>(servers);
+        ServersToConnect = new Queue<Server>(Server.List.Where(x => servers.Contains(x.Name.ToLower())));
 
-        SiteLinkLogger.Info($"{Tag} Connect to (f=yellow){string.Join("(f=white) -> (f=yellow)", servers)}(f=white)", "Client");
+        SiteLinkLogger.Info($"{Tag} Connect to (f=yellow){string.Join("(f=white) -> (f=yellow)", servers)}(f=white)");
 
         TakeServerAndTryConnect();
     }
@@ -1067,6 +1127,8 @@ public class Client : IDisposable
             Request.RejectWithMessage(message);
             Listener?.OnClientDisconneted(this, DisconnectReason.DisconnectPeerCalled);
             Dispose();
+
+            SiteLinkLogger.Info($"{Tag} Disconnected{(string.IsNullOrEmpty(message) ? string.Empty : $" with reason '(f=yellow){message}(f=white)'")}");
             return;
         }
 
@@ -1104,6 +1166,8 @@ public class Client : IDisposable
             Listener.ConnectedClients.Remove(Peer.Id);
 
         Listener.UnregisterClientInLookup(this);
+
+        _scheduler = null;
 
         IsDisposing = true;
     }

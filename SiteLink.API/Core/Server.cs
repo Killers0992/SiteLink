@@ -1,4 +1,7 @@
-﻿namespace SiteLink.API.Core;
+﻿using SiteLink.API.Events;
+using SiteLink.API.Events.Args;
+
+namespace SiteLink.API.Core;
 
 public class Server
 {
@@ -15,6 +18,23 @@ public class Server
         RegisteredServers.Add(ipAddress, server);
         RegisteredServers.Add(server.Name.ToLower(), server);
         List.Add(server);
+
+        EventManager.Server.InvokeServerRegistered(new ServerRegisteredEvent(server));
+    }
+
+    public static void Unregister(string name)
+    {
+        if (!RegisteredServers.TryGetValue(name, out Server server))
+        {
+            return;
+        }
+
+        EventManager.Server.InvokeServerUnregistered(new ServerUnregisteredEvent(server));
+
+        server.Destroy();
+
+        RegisteredServers.Remove(server.IpAddress);
+        RegisteredServers.Remove(server.Name.ToLower());
     }
 
     public static bool TryGetByName(string name, out Server server) => RegisteredServers.TryGetValue($"{name.ToLower()}", out server);
@@ -42,7 +62,38 @@ public class Server
         return null;
     }
 
-    public string Name => Settings.Name;
+    private int _index = -1;
+    private ServerSettings _customSettings;
+
+    public string Name { get; }
+
+    public ServerSettings Settings
+    {
+        get
+        {
+            if (_customSettings != null)
+                return _customSettings;
+
+            switch (_index)
+            {
+                case -1:
+                    _index = SiteLinkSettings.Singleton.Servers.FindIndex(x => x.Name.ToLower() == Name.ToLower());
+
+                    // Index not found return null always.
+                    if (_index == -1)
+                    {
+                        _index = -2;
+                        return null;
+                    }
+                    break;
+                case -2:
+                    return null;
+            }
+
+            return SiteLinkSettings.Singleton.Servers[_index];
+        }
+    }
+
     public string DisplayName => Settings.DisplayName;
     public string IpAddress => Settings.Address;
     public int Port => Settings.Port;
@@ -56,26 +107,13 @@ public class Server
     public int ClientsCount => Clients.Count;
     public int MaxClientsCount => Settings.MaxClients;
 
-    public ServerSettings Settings { get; }
-
-    public Server(ServerSettings settings = null, string name = null, string ip = null, int? port = null, bool? isSimulated = null, bool? forwardIpAddress = null)
+    public Server(string name, ServerSettings customSettings = null, bool isSimulated = false)
     {
-        if (settings == null)
-        {
-            settings = new ServerSettings()
-            {
-                Name = name ?? "Unknown",
-                Address = ip ?? "127.0.0.1",
-                Port = port ?? 7777,
-                ForwardIpAddress = forwardIpAddress ?? false,
-            };
+        Name = name;
+        _customSettings = customSettings;
+        IsSimulated = isSimulated;
 
-            IsSimulated = isSimulated ?? false;
-        }
-
-        Settings = settings;
-
-        SiteLinkLogger.Info($"{Tag} Server registered (f=green){IpAddress}:{Port}(f=white)");
+        SiteLinkLogger.Info($"{Tag} Server registered under ip (f=green){IpAddress}:{Port}(f=white)");
     }
 
     public bool InternalClientConnecting(Client client)
@@ -111,6 +149,16 @@ public class Server
     public virtual void OnClientSSSReponse(Client client, int id) { }
 
     public virtual void OnUpdate() { }
+
+    public void Destroy()
+    {
+        foreach (Client client in Clients)
+        {
+            client.Disconnect("Server removed from config.");
+        }
+
+        SiteLinkLogger.Info($"{Tag} Server unregistered.");
+    }
 
     public override string ToString() => $"{IpAddress}:{Port}";
 }

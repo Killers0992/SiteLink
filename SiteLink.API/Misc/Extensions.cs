@@ -8,7 +8,29 @@ namespace SiteLink.API.Misc;
 
 public static class Extensions
 {
+    private static string _version;
+    private static string _parsedVersion;
+
     public const char ESC = (char)27;
+
+    public static string ParseVersion(this string version)
+    {
+        if (_version != version)
+        {
+            switch (version.ToUpper())
+            {
+                case "LATEST":
+                    _parsedVersion = SiteLinkAPI.GameVersionText;
+                    break;
+                default:
+                    _parsedVersion = version;
+                    break;
+            }
+            _version = version;
+        }
+
+        return _parsedVersion;
+    }
 
     public static bool ValidateGameVersion(this Version gameVersion, Version clientVersion, bool backwardsCompatible, byte backwardsRevision)
     {

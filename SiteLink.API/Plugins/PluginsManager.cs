@@ -25,44 +25,76 @@ public static class PluginsManager
             Directory.CreateDirectory(DependenciesPath);
 
         LoadDependencies();
-        LoadPlugins();
+
+        var assemblies = LoadAssemblies(PluginsPath);
+        LoadPlugins(assemblies);
 
         AppDomain.CurrentDomain.AssemblyResolve += OnResolveAssembly;
+    }
+
+    public static List<Assembly> LoadAssemblies(string folder)
+    {
+        string[] files = Directory.GetFiles(folder, "*.dll");
+
+        List<Assembly> assemblies = new List<Assembly>();
+
+        for (int x = 0; x < files.Length; x++)
+        {
+            string name = Path.GetFileName(files[x]);
+
+            // Disabled assembly, dont take it.
+            if (name.StartsWith("-"))
+                continue;
+
+            byte[] data = File.ReadAllBytes(files[x]);
+
+            Assembly assembly = Assembly.Load(data);
+
+            assemblies.Add(assembly);
+        }
+
+        return assemblies;
     }
 
     public static void LoadDependencies()
     {
         string[] dependencies = Directory.GetFiles(DependenciesPath, "*.dll");
 
-        int loaded = 0;
+        SiteLinkLogger.Info($"Loading (f=yellow){dependencies.Length}(f=white) dependencies...", "PluginsManager");
 
+        int loaded = 0;
         for (int x = 0; x < dependencies.Length; x++)
         {
             Dependencies.Add(Assembly.LoadFrom(dependencies[x]));
             loaded++;
         }
+
+        SiteLinkLogger.Info($"Loaded (f=yellow){loaded}(f=white)/(f=yellow){dependencies.Length}(f=white) dependencies!", "PluginsManager");
     }
 
-    public static void LoadPlugins()
+    public static void LoadPlugins(List<Assembly> assemblies)
     {
-        string[] plugins = Directory.GetFiles(PluginsPath, "*.dll");
+        SiteLinkLogger.Info($"Loading (f=yellow){assemblies.Count}(f=white) plugins...", "PluginsManager");
 
-        SiteLinkLogger.Info($"Loading (f=yellow){plugins.Length}(f=white) plugins", "Plugins");
-
-        for (int x = 0; x < plugins.Length; x++)
+        int loaded = 0;
+        for (int x = 0; x < assemblies.Count; x++)
         {
-            string name = Path.GetFileName(plugins[x]);
+            int current = x+1;
 
-            if (name.StartsWith("-"))
-                continue;
+            Assembly assembly = assemblies[x];
+            string name = assembly.GetName()?.Name ?? "unknown";
 
-            byte[] data = File.ReadAllBytes(plugins[x]);
-            Assembly assembly = Assembly.Load(data);
+            SiteLinkLogger.Info($"[(f=yellow){current}(f=white)/(f=yellow){assemblies.Count}(f=white)] Plugin '(f=yellow){name}(f=white)' is loading...", "PluginsManager");
 
             Dictionary<string, AssemblyName> loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName()).ToDictionary(x => x.Name, y => y);
             Dictionary<string, AssemblyName> pluginReferences = assembly.GetReferencedAssemblies().ToDictionary(x => x.Name, y => y);
 
             var missingAssemblies = pluginReferences.Where(x => !loadedAssemblies.ContainsKey(x.Key)).ToList();
+
+            foreach(var missing in missingAssemblies)
+            {
+                SiteLinkLogger.Info($"Missing dependency '(f=yellow){missing.Key}(f=white)' v(f=yellow){missing.Value.Version.ToString(3)}(f=white)", "PluginsManager");
+            }
 
             Type[] types = null;
 
@@ -70,9 +102,9 @@ public static class PluginsManager
             {
                 types = assembly.GetTypes();
             }
-            catch (Exception ex)
+            catch (Exception typesException)
             {
-                SiteLinkLogger.Error($"Failed getting types for plugin {name}", "Plugins");
+                SiteLinkLogger.Error($"[(f=yellow){current}(f=red)/(f=yellow){assemblies.Count}(f=red)] Failed getting types for plugin '(f=green){name}(f=red)'\n{typesException}", "PluginsManager");
                 continue;
             }
 
@@ -91,27 +123,43 @@ public static class PluginsManager
             if (plugin == null)
                 continue;
 
+            if (plugin.ApiVersion != null && plugin.ApiVersion.CompareTo(SiteLinkAPI.ApiVersion) > 0)
+            {
+                SiteLinkLogger.Error($"[(f=yellow){current}(f=red)/(f=yellow){assemblies.Count}(f=red)] Plugin '(f=green){plugin.Name}(f=red)' requires API Version '(f=green){plugin.ApiVersion}(f=red)' ( current (f=green){SiteLinkAPI.ApiVersionText}(f=red) )", "PluginsManager");
+                continue;
+            }
+
             NameToAssembly.Add(assembly.FullName, assembly);
 
-            Load(plugin);
+            if (!Load(plugin, out Exception ex))
+            {
+                SiteLinkLogger.Error($"[(f=yellow){current}(f=red)/(f=yellow){assemblies.Count}(f=red)] Plugin '(f=yellow){plugin.Name}(f=red)' failed to load!\n{ex}", "PluginsManager");
+                continue;
+            }
+
+            SiteLinkLogger.Info($"[(f=yellow){current}(f=white)/(f=yellow){assemblies.Count}(f=white)] Plugin '(f=yellow){name}(f=white)' loaded successfully!", "PluginsManager");
+            loaded++;
         }
+
+        SiteLinkLogger.Info($"Loaded (f=yellow){loaded}(f=white)/(f=yellow){assemblies.Count}(f=white) plugins!", "PluginsManager");
     }
 
-    public static void Load(Plugin plugin)
+    public static bool Load(Plugin plugin, out Exception ex)
     {
         plugin.PluginDirectory = Path.Combine(PluginsPath, $"{plugin.Name}");
 
         try
         {
             plugin.LoadConfig();
-
             plugin.OnLoad(_serviceCollection);
 
-            SiteLinkLogger.Info($"Plugin (f=yellow){plugin.Name}(f=white) loaded", "Plugins");
+            ex = null;
+            return true;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            SiteLinkLogger.Error($"Failed loading plugin {plugin.Name}\n{ex}", "Plugins");
+            ex = exception;
+            return false;
         }
     }
 

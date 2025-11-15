@@ -1,5 +1,7 @@
 ﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
+using System;
+using YamlDotNet.Core.Tokens;
 
 namespace SiteLink.Core;
 
@@ -8,6 +10,8 @@ namespace SiteLink.Core;
 /// </summary>
 public class Connection : IDisposable
 {
+    private const string Separator =  "-> ";
+
     private NetManager _netManager;
     private EventBasedNetListener _listener;
 
@@ -114,7 +118,7 @@ public class Connection : IDisposable
 
         Server = server;
 
-        SiteLinkLogger.Info($"{Client.Tag} {(reconnect ? "Reconnecting" : "Connecting")} to (f=yellow){server.Name}(f=white)", "Client");
+        SiteLinkLogger.Info($"{Client.Tag} {(Client.Server == null ? string.Empty : Separator)}{server.Tag} {(reconnect ? "Reconnecting..." : "Connecting...")}");
 
         if (server.IsSimulated)
         {
@@ -124,6 +128,7 @@ public class Connection : IDisposable
             {
                 AcceptConnection();
                 IsConnectedToSimulated = true;
+
                 server.InternalClientConnected(Client);
                 return true;
             }
@@ -164,25 +169,21 @@ public class Connection : IDisposable
 
     void OnDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
-        SiteLinkLogger.Info("Disconnected " + disconnectInfo.Reason);
-
         IsConnecting = false;
 
         switch (disconnectInfo.Reason)
         {
             default:
-                SiteLinkLogger.Info($"{Client.Tag} {disconnectInfo.Reason}", "Client");
+                SiteLinkLogger.Info($"{Client.Tag} {disconnectInfo.Reason}");
                 break;
+
             case DisconnectReason.ConnectionFailed when disconnectInfo.AdditionalData.RawData == null:
+                SiteLinkLogger.Info($"{Client.Tag} {(Client.Server == null ? string.Empty : Separator)}{Server.Tag} Server is (f=red)offline(f=white)!");
                 if (!IsMain)
                 {
                     Client.InvokeConnectionResponse(Server, new ServerIsOfflineResponse());
                     return;
                 }
-
-                //Logger.Info(ConfigService.Singleton.Messages.PlayerServerIsOfflineMessage.Replace("%tag%", Owner.Tag).Replace("%address%", $"{Owner.ClientEndPoint}").Replace("%userid%", Owner.UserId), $"Player");
-                //Owner.DisconnectFromProxy(ConfigService.Singleton.Messages.ServerIsOfflineKickMessage.Replace("%server%", Owner.CurrentServer.Name));
-                SiteLinkLogger.Info($"{Client.Tag} Server (f=yellow){Server.IpAddress}:{Server.Port}(f=white) is offline!", "Client");
 
                 Client.TakeServerAndTryConnect();
                 return;
@@ -211,17 +212,18 @@ public class Connection : IDisposable
                             return;
                         }
 
-                        SiteLinkLogger.Info($"{Client.Tag} Delay connecting to (f=yellow){Server.IpAddress}:{Server.Port}(f=white) by {offset} seconds!", "Client");
+                        SiteLinkLogger.Info($"{Client.Tag} Delay connecting to (f=yellow){Server.IpAddress}:{Server.Port}(f=white) by {offset} seconds!");
                         break;
 
                     case RejectionReason.ServerFull:
+                        SiteLinkLogger.Info($"{Client.Tag} Server (f=yellow){Server.IpAddress}:{Server.Port}(f=white) is full!");
+
                         if (!IsMain)
                         {
                             Client.InvokeConnectionResponse(Server, new ServerIsFullResponse());
                             return;
                         }
 
-                        SiteLinkLogger.Info($"{Client.Tag} Server (f=yellow){Server.IpAddress}:{Server.Port}(f=white) is full!", "Client");
                         Client.OnDisconnectedFromServerInternal(Server, new ConnectionFailedInfo($"Server {Server.IpAddress}:{Server.Port} is full!", DisconnectType.ServerIsFull));
                         break;
 
@@ -237,12 +239,11 @@ public class Connection : IDisposable
                             return;
                         }
 
-                        SiteLinkLogger.Info($"{Client.Tag} Banned from (f=yellow){Server.IpAddress}:{Server.Port}(f=white) with reason (f=yellow){banReason}(f=white)!", "Client");
+                        SiteLinkLogger.Info($"{Client.Tag} Banned from (f=yellow){Server.IpAddress}:{Server.Port}(f=white) with reason (f=yellow){banReason}(f=white)!");
                         break;
 
                     case RejectionReason.Challenge:
-                        SiteLinkLogger.Info($"{Client.Tag} Processing challenge.", "Client");
-                        Challenge.ProcessChallenge(disconnectInfo.AdditionalData);
+                        Challenge.ProcessChallenge(Server.ForwardIpAddress, disconnectInfo.AdditionalData);
                         break;
 
                     default:
@@ -258,21 +259,60 @@ public class Connection : IDisposable
 
             case DisconnectReason.Timeout:
             case DisconnectReason.PeerNotFound:
-                SiteLinkLogger.Info($"{Client.Tag} Server timeout!", "Client");
-                Client.Connect("lobby");
+                SiteLinkLogger.Info($"{Client.Tag} Server timeout!");
+
+                Client.AddToActions(
+                    new TimedAction(
+                        "ReconnectSequence",
+                        TimeSpan.Zero,
+                        p => p.SendHint("Server timeout\n\nConnecting to fallback server...", 6),
+                        null,
+                        new TimedAction("ConnectToServer", TimeSpan.FromSeconds(3), p =>
+                        {
+                            if (Server.Settings.FallbackServers.Length == 0)
+                            {
+                                p.Disconnect($"Server timeout!\n\nTheres no fallback servers set for '{Server.Name}'");
+                                return;
+                            }
+
+                            p.Connect(Server.Settings.FallbackServers);
+                        }
+                    )
+                ));
                 return;
 
             case DisconnectReason.RemoteConnectionClose:
+                SiteLinkLogger.Info("Remote connection closed, check LastResponse");
+
                 switch (Client.LastResponse)
                 {
                     case RoundRestartResponse roundRestart:
-                        Client.Reconnect(Server.Name, roundRestart.TimeOffset, "is restarting");
+                        SiteLinkLogger.Info($"{Client.Tag} Server (f=yellow){Server.Name}(f=white) is restarting, reconnect in (f=yellow){roundRestart.TimeOffset}(f=white) seconds");
+
+                        Client.AddToActions(
+                            new TimedAction(
+                                "ReconnectSequence",
+                                TimeSpan.Zero,
+                                p => p.SendHint($"Server '<color=orange>{Server.Name}</color> is restarting round...", 6),
+                                null,
+                                new TimedAction("ConnectToServer", TimeSpan.FromSeconds(roundRestart.TimeOffset), p =>
+                                {
+                                    if (Server.Settings.FallbackServers.Length == 0)
+                                    {
+                                        p.Disconnect($"Server timeout!\n\nTheres no fallback servers set for '{Server.Name}'");
+                                        return;
+                                    }
+
+                                    p.Connect(Server.Settings.FallbackServers);
+                                }
+                            )
+                        ));
+                        return;
+                    default:
+                        SiteLinkLogger.Info($"{Client.Tag} Remote server closed connection! Connect to -> Lobby");
+                        Client.Connect("lobby");
                         return;
                 }
-
-                SiteLinkLogger.Info($"{Client.Tag} Remote server closed connection!", "Client");
-                Client.Connect("lobby");
-                break;
         }
     }
 
@@ -318,8 +358,6 @@ public class Connection : IDisposable
 
     void OnConnected(NetPeer peer)
     {
-        SiteLinkLogger.Info("Connected");
-
         AcceptConnection();
         Server.InternalClientConnected(Client);
     }
@@ -332,10 +370,10 @@ public class Connection : IDisposable
         if (_netManager == null)
             return;
 
+        Server?.InternalClientDisconnected(Client);
+
         if (!IsConnected)
             return;
-
-        Server?.InternalClientDisconnected(Client);
 
         if (!IsConnectedToSimulated)
             _netManager.FirstPeer.Disconnect();

@@ -7,14 +7,16 @@ public class ListenersService : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        Listener.Token = stoppingToken;
+
         foreach(ServerSettings settings in SiteLinkSettings.Singleton.Servers)
         {
-            Server.Register(new RemoteServer(settings));
+            Server.Register(new RemoteServer(settings.Name));
         }
 
         foreach(ListenerSettings settings in SiteLinkSettings.Singleton.Listeners)
         {
-            Listener.Register(new Listener(settings, stoppingToken));
+            Listener.Register(new Listener(settings.Name));
         }
 
         await RunServerUpdater(stoppingToken);

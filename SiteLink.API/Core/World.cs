@@ -202,7 +202,7 @@ public class World : IDisposable
             _clients.Add(client);
             _clientsVersion++;
 
-            SiteLinkLogger.Info($"{client.Tag} Loaded world (f=green){this}(f=white)", "Client");
+            SiteLinkLogger.Info($"{client.Tag} Loaded world (f=green){this}(f=white)");
 
             result = true;
         }
@@ -233,7 +233,7 @@ public class World : IDisposable
             _clients.Remove(client);
             _clientsVersion--;
 
-            SiteLinkLogger.Info($"{client.Tag} Unloaded world (f=green){this}(f=white)", "Client");
+            SiteLinkLogger.Info($"{client.Tag} Unloaded world (f=green){this}(f=white)");
         }
         finally
         {

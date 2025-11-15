@@ -9,8 +9,6 @@ public class ReadWriterInitializer
     {
         try
         {
-            int count = 0;
-
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 if (assembly.IsDynamic)
@@ -28,7 +26,6 @@ public class ReadWriterInitializer
                         try
                         {
                             method.Invoke(null, null);
-                            count++;
                         }
                         catch (Exception ex)
                         {
@@ -37,8 +34,6 @@ public class ReadWriterInitializer
                     }
                 }
             }
-
-            SiteLinkLogger.Info($"Initialized {count} read/writer method(s).", "InitReadWriters");
         }
         catch (Exception ex)
         {

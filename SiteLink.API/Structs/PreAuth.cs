@@ -64,7 +64,9 @@ public struct PreAuth
         writer.PutBytesWithLength(Signature);
 
         if (includeIp)
+        {
             writer.Put(IpAddress);
+        }
 
         return writer;
     }
@@ -134,8 +136,6 @@ public struct PreAuth
                 return false;
             }
         }
-
-        SiteLinkLogger.Info($"Ver {major}.{minor}.{revision}, backward {backwardCompatibility} {backwardRevision}");
 
         Version clientVersion = new Version(major, minor, revision);
 

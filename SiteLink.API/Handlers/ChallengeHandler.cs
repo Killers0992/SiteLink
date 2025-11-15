@@ -13,7 +13,7 @@ public class ChallengeHandler
         Parent = parent;
     }
 
-    public void ProcessChallenge(NetPacketReader reader)
+    public void ProcessChallenge(bool forwardIpAddress, NetPacketReader reader)
     {
         if (!reader.TryGetByte(out byte mode) || !reader.TryGetInt(out ClientChallengeId))
             return;
@@ -25,7 +25,7 @@ public class ChallengeHandler
             case ChallengeType.Reply:
                 if (reader.TryGetBytesWithLength(out ClientChallengeResponse))
                 {
-                    Parent.Reconnect(Parent.Client.PreAuth.Create(false, ClientChallengeId, ClientChallengeResponse));
+                    Parent.Reconnect(Parent.Client.PreAuth.Create(forwardIpAddress, ClientChallengeId, ClientChallengeResponse));
                 }
                 break;
 
@@ -35,7 +35,7 @@ public class ChallengeHandler
                     reader.TryGetUShort(out ClientChallengeSecretLen) &&
                     reader.TryGetBytesWithLength(out ClientChallenge))
                 {
-                    //Logger.Info($"Received challenge {challengeType} which is not supported");
+                    SiteLinkLogger.Error($"Received challenge {challengeType} which is not supported");
                 }
                 break;
         }
