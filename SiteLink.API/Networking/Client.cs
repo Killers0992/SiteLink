@@ -3,6 +3,8 @@ using PlayerRoles;
 using PlayerRoles.FirstPersonControl;
 using RelativePositioning;
 using RoundRestarting;
+using SiteLink.API.Events;
+using SiteLink.API.Events.Args;
 using SiteLink.Core;
 using SiteLink.Networking.Batchers;
 using UserSettings.ServerSpecific;
@@ -76,9 +78,16 @@ public class Client : IDisposable
         get => _world;
         set
         {
-            if (value == null && _world != null)
+            if (_world != null)
             {
-                _world.Unload(this);
+                if (value == null)
+                    Object = null;
+
+                _world.Unload(this, value);
+            }
+            else
+            {
+                Object = null;
             }
 
             _world = value;
@@ -212,6 +221,8 @@ public class Client : IDisposable
     /// </summary>
     public CustomBatcher Batcher { get; private set; } = new CustomBatcher(65535 * (NetConstants.MaxPacketSize - 6));
 
+    public CustomBatcher BatcherCurrentServer { get; private set; } = new CustomBatcher(65535 * (NetConstants.MaxPacketSize - 6));
+
     /// <summary>
     /// Gets or sets a value indicating whether the client is reconnecting.
     /// </summary>
@@ -221,6 +232,13 @@ public class Client : IDisposable
     /// Gets or sets the server name to reconnect to.
     /// </summary>
     public string ReconnectTo;
+
+    /// <summary>
+    /// The queue of server names to connect to.
+    /// </summary>
+    public Queue<Server> ServersToConnect = new Queue<Server>();
+
+    public bool SilentConnection;
 
     /// <summary>
     /// Gets or sets the time of the next reconnect attempt.
@@ -241,6 +259,8 @@ public class Client : IDisposable
     /// Gets the tag used for logging and identification.
     /// </summary>
     public string Tag => $"{Listener.Tag} [(f=green){PreAuth.UserId}(f=white)]{(Server == null ? string.Empty : $" {Server.Tag}")}";
+
+    public int Seed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Client"/> class.
@@ -345,7 +365,8 @@ public class Client : IDisposable
             return false;
         }
 
-        ReconnectAttempt = DateTime.Now.AddSeconds(timeOffset);
+        AddToReconnectAttempt(TimeSpan.FromSeconds(timeOffset));
+
         ReconnectTo = serverName;
         IsReconnecting = true;
         _reconnectAttempt++;
@@ -378,6 +399,13 @@ public class Client : IDisposable
         {
             ArraySegment<byte> segment = batchWriter.ToArraySegment();
             SendData(segment.Array, segment.Offset, segment.Count, DeliveryMethod.ReliableOrdered);
+            batchWriter.Position = 0;
+        }
+
+        while (BatcherCurrentServer.GetBatch(batchWriter))
+        {
+            ArraySegment<byte> segment = batchWriter.ToArraySegment();
+            Connection.Send(segment.Array, segment.Offset, segment.Count, DeliveryMethod.ReliableOrdered);
             batchWriter.Position = 0;
         }
     }
@@ -482,11 +510,10 @@ public class Client : IDisposable
         double timeStamp = reader.ReadDouble();
 
         bool end = false;
-        int totalReads = 0;
+        bool canceled = false;
 
         while (reader.Remaining != 0 && !end)
         {
-            int positionBeforeRead = reader.Position;
             int size = (int)Compression.DecompressVarUInt(reader);
 
             if (reader.Remaining < size)
@@ -496,23 +523,17 @@ public class Client : IDisposable
             }
 
             ArraySegment<byte> message = reader.ReadBytesSegment(size);
-            int positionAfterRead = reader.Position;
 
             NetworkReader reader2 = new NetworkReader(message);
 
             if (Mirror.NetworkMessages.UnpackId(reader2, out ushort messageId))
             {
-                if (ProcessMirrorMessageFromListener(messageId, reader2))
-                {
-                }
-                else
-                    return false;
-
+                if (!ProcessMirrorMessageFromListener(messageId, reader2))
+                    canceled = true;
             }
-            totalReads++;
         }
 
-        return true;
+        return !canceled;
     }
 
     /// <summary>
@@ -528,7 +549,7 @@ public class Client : IDisposable
             case NetworkMessages.FpcFromClientMessage:
                 if (!IsReady)
                 {
-                    //Logger.Info("Dont sent position to SERVER becuase CLIENT IS NOT READY");
+                    SiteLinkLogger.Info("Dont sent position to SERVER becuase CLIENT IS NOT READY");
                     return false;
                 }
 
@@ -588,13 +609,30 @@ public class Client : IDisposable
                 break;
 
             case NetworkMessages.ReadyMessage:
-                Server?.OnClientReady(this);
-                IsReady = true;
-                break;
+
+                if (Seed != -1) SendSeed(Seed);
+
+                AddToActions(new TimedAction("FinalizeReady", TimeSpan.FromSeconds(1.5), p =>
+                {
+                    NetworkWriter wr = new NetworkWriter();
+                    wr.WriteUShort(NetworkMessages.ReadyMessage);
+                    p.SendMirrorDataToCurrentServer(wr);
+
+                    Server?.OnClientReady(this);
+                    IsReady = true;
+
+                    wr = new NetworkWriter();
+                    wr.WriteUShort(NetworkMessages.AddPlayerMessage);
+                    p.SendMirrorDataToCurrentServer(wr);
+
+                    Server?.OnClientSpawnPlayer(this);
+
+                    SiteLinkLogger.Info($"{Tag} Set as ready");
+                }));
+                return false;
 
             case NetworkMessages.AddPlayerMessage:
-                Server?.OnClientSpawnPlayer(this);
-                break;
+                return false;
 
             case NetworkMessages.CommandMessage:
                 CommandMessage commandMessage = new CommandMessage
@@ -642,6 +680,14 @@ public class Client : IDisposable
 
         switch (id)
         {
+            case NetworkMessages.SeedMessage:
+                int seed = reader.ReadInt();
+                Seed = seed;
+                return false;
+
+            case NetworkMessages.SceneMessage:
+                return false;
+
             case NetworkMessages.ServerShutdownMessage:
                 return false;
 
@@ -656,6 +702,11 @@ public class Client : IDisposable
                 LastResponse = new RoundRestartResponse(restartMessage.Type, restartMessage.TimeOffset);
                 Connection.Disconnect();
                 return false;
+
+            case NetworkMessages.StatMessage:
+                if (!Connection.IsConnected)
+                    return false;
+                break;
 
             case NetworkMessages.RoleSyncInfo:
                 uint entityId = reader.ReadUInt();
@@ -755,11 +806,6 @@ public class Client : IDisposable
     }
 
     /// <summary>
-    /// The queue of server names to connect to.
-    /// </summary>
-    public Queue<Server> ServersToConnect = new Queue<Server>();
-
-    /// <summary>
     /// Attempts to connect to the next server in the queue.
     /// </summary>
     public void TakeServerAndTryConnect()
@@ -808,7 +854,7 @@ public class Client : IDisposable
     /// </summary>
     /// <typeparam name="TServer">The server type.</typeparam>
     /// <param name="server">The server instance.</param>
-    public bool Connect<TServer>(TServer server) where TServer : Server
+    public bool Connect<TServer>(TServer server, bool isSilent = false) where TServer : Server
     {
         if (server == null)
         {
@@ -818,19 +864,31 @@ public class Client : IDisposable
 
         if (Connection.IsConnected && server == Server)
         {
-            SendHint("<color=red>You are already connected to this server!</color>");
+            if (!isSilent)
+                SendHint("<color=red>You are already connected to this server!</color>");
             return false;
         }
 
         if (ReconnectAttempt > DateTime.Now)
-            return false;
+        {
+            if (!isSilent)
+                SendHint($"Try again in {(DateTime.Now - ReconnectAttempt).TotalSeconds.ToString("ss':'fff")}", 3f);
 
-        if (Object != null)
+            return false;
+        }
+
+        if (Object != null && !isSilent)
             SendHint($"Connecting...", 3f);
 
+        BackupConnection.IsSilent = isSilent;
         BackupConnection.Setup(this);
 
         return BackupConnection.TryMakeConnection(server, PreAuth.Create(server.ForwardIpAddress));
+    }
+
+    public void AddToReconnectAttempt(TimeSpan time)
+    {
+        ReconnectAttempt = ReconnectAttempt.Add(time);
     }
 
     /// <summary>
@@ -857,14 +915,17 @@ public class Client : IDisposable
         if (Batcher == null)
             return;
 
-        try
-        {
-            Batcher.AddMessage(writer.ToArraySegment(), Connectiontime.TotalSeconds);
-        }
-        catch (Exception ex)
-        {
-            SiteLinkLogger.Error(ex);
-        }
+        Batcher.AddMessage(writer.ToArraySegment(), Connectiontime.TotalSeconds);
+
+        writer = null;
+    }
+
+    public void SendMirrorDataToCurrentServer(NetworkWriter writer)
+    {
+        if (Batcher == null)
+            return;
+
+        BatcherCurrentServer.AddMessage(writer.ToArraySegment(), Connectiontime.TotalSeconds);
 
         writer = null;
     }
@@ -967,12 +1028,19 @@ public class Client : IDisposable
     /// </summary>
     public void SpawnPlayer()
     {
+        if (Object != null)
+        {
+            SiteLinkLogger.Info($"{Tag} Player object already exists for client ");
+            return;
+        }
+
         Object = new PlayerObject(World);
         Object.AssignOwner(this);
 
         Object.Position = new Vector3(0f, -299f, 0f);
 
         this.NetworkIdentityId = Object.NetworkId;
+        SiteLinkLogger.Info($"{Tag} Created new player object for client.");
     }
 
     /// <summary>
@@ -1004,6 +1072,8 @@ public class Client : IDisposable
         SendMirrorData(wr);
     }
 
+    private string _sceneToLoad = string.Empty;
+
     /// <summary>
     /// Sends a scene change message to the client.
     /// </summary>
@@ -1021,6 +1091,8 @@ public class Client : IDisposable
         //Custom handling
         wr.WriteBool(false);
 
+        _sceneToLoad = sceneName;
+
         SendMirrorData(wr);
     }
 
@@ -1037,6 +1109,12 @@ public class Client : IDisposable
     /// </summary>
     /// <param name="seed">The seed value.</param>
     public void SetSeed(int seed)
+    {
+        Seed = seed;
+        SiteLinkLogger.Info($"{Tag} Set seed to {seed}");
+    }
+
+    public void SendSeed(int seed)
     {
         NetworkWriter wr = new NetworkWriter();
 
@@ -1075,17 +1153,18 @@ public class Client : IDisposable
     }
 
     /// <summary>
-    /// The action to invoke when a connection response is received.
-    /// </summary>
-    public Action<Client, Server, IDisconnectResponse> ConnectionResponse;
-
-    /// <summary>
     /// Invokes the connection response action.
     /// </summary>
     /// <param name="server">The server.</param>
     /// <param name="response">The response.</param>
-    public void InvokeConnectionResponse(Server server, IDisconnectResponse response)
+    public void InvokeConnectionResponse(Server server, bool isSilent, IDisconnectResponse response)
     {
+        ClientConnectionResponseEvent ev = new ClientConnectionResponseEvent(this, server, response);
+        EventManager.Client.InvokeConnectionResponse(ev);
+
+        if (ev.IsCancelled)
+            return;
+
         switch (response)
         {
             case ServerIsOfflineResponse _:
@@ -1100,20 +1179,26 @@ public class Client : IDisposable
                 }
                 else
                 {
-                    SendHint($"Server <color=orange>{server.Name}</color> is <color=red>offline</color>!", 1f);
+                    if (!isSilent)
+                        SendHint($"Server <color=orange>{server.Name}</color> is <color=red>offline</color>!", 3f);
+
+                    AddToReconnectAttempt(TimeSpan.FromSeconds(4));
                     LastResponse = null;
                 }
                 break;
             case ServerIsFullResponse _:
-                SendHint($"Server <color=orange>{server.Name}</color> is full!", 1f);
+                if (!isSilent)
+                    SendHint($"Server <color=orange>{server.Name}</color> is full!", 3f);
+
+                AddToReconnectAttempt(TimeSpan.FromSeconds(4));
                 break;
             case DelayConnectionResponse delay:
-                SendHint($"Server <color=orange>{server.Name}</color> delayed connection by <color=green>{delay.TimeInSeconds}\nReconnecting...", 1f);
+                if (!isSilent)
+                    SendHint($"Server <color=orange>{server.Name}</color> delayed connection by <color=green>{delay.TimeInSeconds}\nReconnecting...", 3f);
+
                 Reconnect(server.Name, delay.TimeInSeconds, "delayed connection");
                 break;
         }
-
-        ConnectionResponse?.Invoke(this, server, response);
     }
 
     /// <summary>

@@ -221,8 +221,10 @@ public class World : IDisposable
     /// <summary>
     /// Unloads a client from the world.
     /// </summary>
-    public bool Unload(Client client)
+    public bool Unload(Client client, World targetWorld = null)
     {
+        DestroyObjectsForClient(client, targetWorld);
+
         _lock.EnterWriteLock();
         try
         {
@@ -270,6 +272,30 @@ public class World : IDisposable
 
         // Call outside the lock to avoid recursion
         OnObjectsSpawned(client);
+    }
+
+    public void DestroyObjectsForClient(Client client, World targetWorld)
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            foreach (var obj in Objects)
+            {
+                if (obj.Value is PlayerObject pObject)
+                {
+                    pObject.MoveToWorld(targetWorld);
+
+                    if (targetWorld == null)
+                        pObject.Owner.Object = null;
+                }
+                else
+                    obj.Value.Destroy(client);
+            }
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     /// <summary>

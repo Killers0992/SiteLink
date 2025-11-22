@@ -41,6 +41,11 @@ public class ReloadCommand
             Listener.Register(new Listener(listener));
         }
 
+        foreach(Plugin plugin in PluginsManager.AssemblyToPlugin.Values)
+        {
+            plugin.LoadConfig();
+        }
+
         SiteLinkLogger.Info("Reloaded");
     }
 

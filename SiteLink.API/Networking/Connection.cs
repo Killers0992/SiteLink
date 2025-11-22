@@ -20,6 +20,8 @@ public class Connection : IDisposable
     /// </summary>
     public bool IsMain { get; set; } = true;
 
+    public bool IsSilent { get; set; } = false;
+
     /// <summary>
     /// Gets a value indicating whether the connection is currently established.
     /// </summary>
@@ -112,13 +114,18 @@ public class Connection : IDisposable
             return false;
 
         if (IsConnecting)
+        {
+            if (Client.Object != null)
+                Client.SendHint("Already connecting to a server...", 3);
             return false;
+        }
 
         IsConnectedToSimulated = false;
 
         Server = server;
 
-        SiteLinkLogger.Info($"{Client.Tag} {(Client.Server == null ? string.Empty : Separator)}{server.Tag} {(reconnect ? "Reconnecting..." : "Connecting...")}");
+        if (!IsSilent)
+            SiteLinkLogger.Info($"{Client.Tag} {(Client.Server == null ? string.Empty : Separator)}{server.Tag} {(reconnect ? "Reconnecting..." : "Connecting...")}");
 
         if (server.IsSimulated)
         {
@@ -137,6 +144,7 @@ public class Connection : IDisposable
         }
 
         _netManager.Connect(Server.IpAddress, Server.Port, connectionData);
+
         IsConnecting = true;
         return true;
     }
@@ -174,14 +182,17 @@ public class Connection : IDisposable
         switch (disconnectInfo.Reason)
         {
             default:
-                SiteLinkLogger.Info($"{Client.Tag} {disconnectInfo.Reason}");
+                SiteLinkLogger.Info($"{Client.Tag} Disconnect undefined {disconnectInfo.Reason}");
                 break;
 
             case DisconnectReason.ConnectionFailed when disconnectInfo.AdditionalData.RawData == null:
-                SiteLinkLogger.Info($"{Client.Tag} {(Client.Server == null ? string.Empty : Separator)}{Server.Tag} Server is (f=red)offline(f=white)!");
+
+                if (!IsSilent)
+                    SiteLinkLogger.Info($"{Client.Tag} {(Client.Server == null ? string.Empty : Separator)}{Server.Tag} Server is (f=red)offline(f=white)!");
+
                 if (!IsMain)
                 {
-                    Client.InvokeConnectionResponse(Server, new ServerIsOfflineResponse());
+                    Client.InvokeConnectionResponse(Server, IsSilent, new ServerIsOfflineResponse());
                     return;
                 }
 
@@ -198,17 +209,19 @@ public class Connection : IDisposable
 
                 bool cancel = false;
 
-                SiteLinkLogger.Info(reason);
-
                 switch (reason)
                 {
+                    case RejectionReason.RateLimit:
+                        Client.AddToReconnectAttempt(TimeSpan.FromSeconds(4));
+                        break;
+
                     case RejectionReason.Delay:
                         if (!disconnectInfo.AdditionalData.TryGetByte(out byte offset))
                             break;
 
                         if (!IsMain)
                         {
-                            Client.InvokeConnectionResponse(Server, new DelayConnectionResponse(offset));
+                            Client.InvokeConnectionResponse(Server, IsSilent, new DelayConnectionResponse(offset));
                             return;
                         }
 
@@ -216,11 +229,13 @@ public class Connection : IDisposable
                         break;
 
                     case RejectionReason.ServerFull:
-                        SiteLinkLogger.Info($"{Client.Tag} Server (f=yellow){Server.IpAddress}:{Server.Port}(f=white) is full!");
+
+                        if (!IsSilent)
+                            SiteLinkLogger.Info($"{Client.Tag} Server (f=yellow){Server.IpAddress}:{Server.Port}(f=white) is full!");
 
                         if (!IsMain)
                         {
-                            Client.InvokeConnectionResponse(Server, new ServerIsFullResponse());
+                            Client.InvokeConnectionResponse(Server, IsSilent, new ServerIsFullResponse());
                             return;
                         }
 
@@ -235,7 +250,7 @@ public class Connection : IDisposable
 
                         if (!IsMain)
                         {
-                            Client.InvokeConnectionResponse(Server, new BannedResponse(banReason, date));
+                            Client.InvokeConnectionResponse(Server, IsSilent, new BannedResponse(banReason, date));
                             return;
                         }
 
@@ -335,31 +350,35 @@ public class Connection : IDisposable
 
     void AcceptConnection()
     {
-        //SiteLinkLogger.Info($"{Client.Tag} Set client as connected");
-
-        IsConnecting = false;
         Client.AcceptConnection();
 
         EventManager.Client.InvokeJoinedServer(new ClientJoinedServerEvent(Client, Server));
 
-        Client.Connection = this;
-        Client.LastResponse = null;
-
-        //SiteLinkLogger.Info($"{Client.Tag} Set last response to null to prevent issues");
-
-        if (Client.Object != null)
+        Client.AddToActions(new TimedAction("Reset0", TimeSpan.Zero, p =>
         {
-            Client.SetRole(PlayerRoles.RoleTypeId.Destroyed);
+            if (Client.Object != null) Client.SetRole(PlayerRoles.RoleTypeId.Destroyed);
+        }, 
+        nextAction: new TimedAction("Reset1", TimeSpan.FromSeconds(1), p =>
+        {
+            if (Client.Object != null)  Client.SendSeed(-1);
 
-            Client.FastRoundrestart();
             Client.NotReady();
-        }
+
+            if (Client.Object != null) Client.FastRoundrestart();
+
+            Client.SendToScene("Facility");
+
+            Client.Connection = this;
+            Client.LastResponse = null;
+        })));
     }
 
     void OnConnected(NetPeer peer)
     {
         AcceptConnection();
         Server.InternalClientConnected(Client);
+
+        IsConnecting = false;
     }
 
     /// <summary>
@@ -394,6 +413,8 @@ public class Connection : IDisposable
     /// </summary>
     public void Dispose()
     {
+        IsConnecting = false;
+
         Disconnect();
 
         if (_listener != null)

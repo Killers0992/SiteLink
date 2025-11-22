@@ -38,6 +38,9 @@ public class ClientEvents
     public event CustomEventHandler<ClientConnectingToListenerEvent> ConnectingToListener;
     public void InvokeConnectingToListener(ClientConnectingToListenerEvent ev) => ConnectingToListener?.InvokeWithExceptionHandler(ev);
 
+    public event CustomEventHandler<ClientConnectionResponseEvent> ConnectionResponse;
+    public void InvokeConnectionResponse(ClientConnectionResponseEvent ev) => ConnectionResponse?.InvokeWithExceptionHandler(ev);
+
     public event CustomEventHandler<ClientJoinedServerEvent> JoinedServer;
     public void InvokeJoinedServer(ClientJoinedServerEvent ev) => JoinedServer?.InvokeWithExceptionHandler(ev);
 

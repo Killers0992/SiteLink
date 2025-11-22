@@ -39,6 +39,7 @@ public class RemoteServer : Server
 
     public RemoteServer(string name) : base(name) { }
 
+    public override void OnClientConnected(Client client) { }
     public override void OnClientSpawned(Client client) => client.SendServerSpecificEntries(ServerSettings);
     public override void OnClientSSSReponse(Client client, int id)
     {

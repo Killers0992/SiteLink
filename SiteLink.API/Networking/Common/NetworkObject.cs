@@ -14,7 +14,9 @@ public class NetworkObject : IDisposable
 
     public Client Owner { get; private set; }
 
-    public World World { get; }
+    public World World { get; private set; }
+
+    public BehaviourComponent[] Behaviours { get; set; }
 
     public NetworkObject(World world, Client owner, uint networkId = 0)
     {
@@ -38,7 +40,18 @@ public class NetworkObject : IDisposable
         }
     }
 
-    public BehaviourComponent[] Behaviours { get; set; }
+    public void MoveToWorld(World world)
+    {
+        if (world == null)
+        {
+            return;
+        }
+
+        World.Objects.Remove(NetworkId);
+
+        world.Objects.Add(NetworkId, this);
+        World = world;
+    }
 
     public void SendUpdate(Client client)
     {
@@ -144,6 +157,11 @@ public class NetworkObject : IDisposable
     public void AssignOwner(Client owner)
     {
         Owner = owner;
+    }
+
+    public void Destroy(Client client)
+    {
+        client.DestroyObject(NetworkId);
     }
 
     public void Destroy()

@@ -137,7 +137,7 @@ public class Server
     }
 
     public virtual bool OnClientConnecting(Client client) => false;
-    
+
     public virtual void OnClientConnected(Client client) { }
     public virtual void OnClientDisconnected(Client client) { }
 

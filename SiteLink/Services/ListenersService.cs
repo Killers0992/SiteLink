@@ -1,4 +1,5 @@
-﻿using SiteLink.API.Models;
+﻿using SiteLink.API.Core;
+using SiteLink.API.Models;
 using SiteLink.Servers;
 
 namespace SiteLink.Services;
@@ -9,15 +10,23 @@ public class ListenersService : BackgroundService
     {
         Listener.Token = stoppingToken;
 
-        foreach(ServerSettings settings in SiteLinkSettings.Singleton.Servers)
+        try
         {
-            Server.Register(new RemoteServer(settings.Name));
+            foreach (ServerSettings settings in SiteLinkSettings.Singleton.Servers)
+            {
+                Server.Register(new RemoteServer(settings.Name));
+            }
+
+            foreach (ListenerSettings settings in SiteLinkSettings.Singleton.Listeners)
+            {
+                Listener.Register(new Listener(settings.Name));
+            }
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine(ex);
         }
 
-        foreach(ListenerSettings settings in SiteLinkSettings.Singleton.Listeners)
-        {
-            Listener.Register(new Listener(settings.Name));
-        }
 
         await RunServerUpdater(stoppingToken);
     }
@@ -26,17 +35,26 @@ public class ListenersService : BackgroundService
     {
         while (!token.IsCancellationRequested)
         {
-            foreach (var server in Server.RegisteredServers.Values)
+
+            try
             {
-                try
+                foreach (var server in Server.RegisteredServers.Values)
                 {
-                    server.OnUpdate();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex);
+                    try
+                    {
+                        server.OnUpdate();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex);
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+
             
             await Task.Delay(10, token);
         }
