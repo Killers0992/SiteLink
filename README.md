@@ -1,5 +1,6 @@
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Killers0992/SiteLink/total?label=Downloads\&labelColor=2e343e\&color=00FFFF\&style=for-the-badge)
 [![Discord](https://img.shields.io/discord/1434213646510325762?label=Discord\&labelColor=2e343e\&color=00FFFF\&style=for-the-badge)](https://discord.gg/Sva8TaCR7Q)
+![NuGet Version](https://img.shields.io/nuget/v/SiteLink.API?labelColor=2e343e\&color=00FFFF\&style=for-the-badge)
 
 
 
