@@ -338,6 +338,7 @@ public class Client : IDisposable
     /// </summary>
     public void AcceptConnection()
     {
+        LastResponse = null;
         _reconnectAttempt = 0;
 
         if (Request == null)
@@ -359,14 +360,11 @@ public class Client : IDisposable
     {
         if (_reconnectAttempt >= SiteLinkSettings.Singleton.MaximumReconnectAttempts)
         {
-            SiteLinkLogger.Info($"{Tag} Reached max attemps -> disconnect ");
-            //Connect(Server.Settings.FallbackServers);
-            LastResponse = null;
+            SiteLinkLogger.Info($"{Tag} Reached max attemps");
             return false;
         }
 
         AddToReconnectAttempt(TimeSpan.FromSeconds(timeOffset));
-
         ReconnectTo = serverName;
         IsReconnecting = true;
         _reconnectAttempt++;
@@ -382,14 +380,9 @@ public class Client : IDisposable
     {
         Scheduler?.Update();
 
-        if (IsReconnecting)
+        if (IsReconnecting && ReconnectAttempt < DateTime.Now && Connect(ReconnectTo))
         {
-            if (ReconnectAttempt < DateTime.Now)
-            {
-                SiteLinkLogger.Info("Reconnect to " + ReconnectTo);
-                Connect(ReconnectTo);
-                IsReconnecting = false;
-            }
+            IsReconnecting = false;
         }
 
         Connection.Update();
@@ -697,8 +690,6 @@ public class Client : IDisposable
 
                 RoundRestartMessage restartMessage = RoundRestartMessageReaderWriter.ReadRoundRestartMessage(reader);
 
-                SiteLinkLogger.Info("Set last response to RoundRestart");
-
                 LastResponse = new RoundRestartResponse(restartMessage.Type, restartMessage.TimeOffset);
                 Connection.Disconnect();
                 return false;
@@ -888,6 +879,9 @@ public class Client : IDisposable
 
     public void AddToReconnectAttempt(TimeSpan time)
     {
+        if (ReconnectAttempt < DateTime.Now)
+            ReconnectAttempt = DateTime.Now;
+
         ReconnectAttempt = ReconnectAttempt.Add(time);
     }
 
@@ -1168,22 +1162,37 @@ public class Client : IDisposable
         switch (response)
         {
             case ServerIsOfflineResponse _:
-                if (LastResponse is RoundRestartResponse restart)
+                switch (LastResponse)
                 {
-                    SendHint($"Server <color=orange>{server.Name}</color> is still <color=red>offline</color>!\nReconnecting...", 3f);
-                    if (!Reconnect(server.Name, 2f, "is still restarting"))
-                    {
-                        Disconnect("Reached max reconnect attemps!");
+                    case RoundRestartResponse restart:
+                        SendHint($"Server <color=orange>{server.Name}</color> is still <color=red>offline</color>!\nReconnecting...", 3f);
+                        if (!Reconnect(server.Name, 2f, "is still restarting"))
+                        {
+                            if (server.Settings.FallbackServers.Length > 0)
+                            {
+                                SendHint($"Connecting to fallback server...", 3f);
+                                Connect(server.Settings.FallbackServers);
+                                return;
+                            }
+
+                            Disconnect("Reached max reconnect attemps!");
+                            break;
+                        }
                         break;
-                    }
-                }
-                else
-                {
-                    if (!isSilent)
+                    case DelayConnectionResponse _:
+                        LastResponse = null;
+
                         SendHint($"Server <color=orange>{server.Name}</color> is <color=red>offline</color>!", 3f);
 
-                    AddToReconnectAttempt(TimeSpan.FromSeconds(4));
-                    LastResponse = null;
+                        if (server.Settings.FallbackServers.Length > 0)
+                        {
+                            SendHint($"Connecting to fallback server...", 3f);
+                            Connect(server.Settings.FallbackServers);
+                            return;
+                        }
+
+                        Disconnect("Server is offline!");
+                        break;
                 }
                 break;
             case ServerIsFullResponse _:
@@ -1192,6 +1201,7 @@ public class Client : IDisposable
 
                 AddToReconnectAttempt(TimeSpan.FromSeconds(4));
                 break;
+
             case DelayConnectionResponse delay:
                 if (!isSilent)
                     SendHint($"Server <color=orange>{server.Name}</color> delayed connection by <color=green>{delay.TimeInSeconds}\nReconnecting...", 3f);

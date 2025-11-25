@@ -12,7 +12,7 @@ public class SiteLinkAPI
     static Version _apiVersion;
 
     public const string GameVersionText = "14.2.2";
-    public const string ApiVersionText = "0.1.0";
+    public const string ApiVersionText = "1.0.1";
 
     public static Version GameVersion
     {

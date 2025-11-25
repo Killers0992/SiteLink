@@ -219,13 +219,17 @@ public class Connection : IDisposable
                         if (!disconnectInfo.AdditionalData.TryGetByte(out byte offset))
                             break;
 
+                        if (!IsSilent)
+                            SiteLinkLogger.Info($"{Client.Tag} {(Client.Server == null ? string.Empty : Separator)}{Server.Tag} Server delayed connection by '(f=green){offset}(f=white)' seconds!");
+
                         if (!IsMain)
                         {
-                            Client.InvokeConnectionResponse(Server, IsSilent, new DelayConnectionResponse(offset));
+                            DelayConnectionResponse offsetResponse = new DelayConnectionResponse(offset);
+                            Client.InvokeConnectionResponse(Server, IsSilent, offsetResponse);
+                            Client.LastResponse = offsetResponse;
                             return;
                         }
 
-                        SiteLinkLogger.Info($"{Client.Tag} Delay connecting to (f=yellow){Server.IpAddress}:{Server.Port}(f=white) by {offset} seconds!");
                         break;
 
                     case RejectionReason.ServerFull:
