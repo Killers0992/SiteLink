@@ -10,7 +10,7 @@
 
 It connects multiple servers into one seamless network, enabling load balancing, player transfers, and centralized management — built for stability, speed, and scalability.
 
-> **API Version:** `0.1.0`  
+> **API Version:** `1.0.0`  
 > **Supported Game Version:** `14.2.2`  
 
 ---
