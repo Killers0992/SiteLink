@@ -50,6 +50,8 @@ public class Listener
             ClientByUserId.Remove(client.PreAuth.UserId);
     }
 
+    public SessionManager SessionManager { get; } = new SessionManager();
+
     private string _version;
     private Version _parsedGameVersion;
 
@@ -198,9 +200,11 @@ public class Listener
                 Console.WriteLine(ex);
             }
 
+            SessionManager?.Update();
+
             foreach (Client client in NotConnectedClients)
             {
-                if (client.Connection.IsConnected || client.IsDisposing)
+                if (client.IsDisposing)
                 {
                     //ProxyLogger.Info("Dispose not connected client " + client.PreAuth.UserId);
                     _clientsToRemove.Enqueue(client);
@@ -286,7 +290,7 @@ public class Listener
         if (!client.ProcessMirrorDataFromListener(ref bytes, ref pos, ref length))
             return;
 
-        client.Connection.Send(bytes, pos, length, deliveryMethod);
+        client?.Session.Send(bytes, pos, length, deliveryMethod);
     }
 
     void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)

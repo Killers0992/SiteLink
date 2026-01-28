@@ -31,7 +31,7 @@ public class SendCommand
                 int sent = 0;
                 foreach (Client client in Listener.ClientByUserId.Values)
                 {
-                    if (client.Server == server)
+                    if (client.Session.Server == server)
                         continue;
 
                     client.Connect(server);
