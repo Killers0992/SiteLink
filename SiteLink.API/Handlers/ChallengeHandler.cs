@@ -25,7 +25,7 @@ public class ChallengeHandler
             case ChallengeType.Reply:
                 if (reader.TryGetBytesWithLength(out ClientChallengeResponse))
                 {
-                    Session.ConnectWithChallenge(ClientChallengeId, ClientChallengeResponse);
+                    Session.Connect(ClientChallengeId, ClientChallengeResponse);
                 }
                 break;
 

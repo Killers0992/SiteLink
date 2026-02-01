@@ -15,7 +15,7 @@ public class Ammo12gaPickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public AmmoPickupComponent AmmoPickup { get; }
 
-    public Ammo12gaPickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public Ammo12gaPickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

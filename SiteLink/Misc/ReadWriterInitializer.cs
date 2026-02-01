@@ -29,7 +29,7 @@ public class ReadWriterInitializer
                         }
                         catch (Exception ex)
                         {
-                            SiteLinkLogger.Error($"Failed to call {type.FullName}.{method.Name}(): {ex}");
+                            //SiteLinkLogger.Error($"Failed to call {type.FullName}.{method.Name}(): {ex}");
                         }
                     }
                 }

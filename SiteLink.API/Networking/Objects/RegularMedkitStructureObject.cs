@@ -16,7 +16,7 @@ public class RegularMedkitStructureObject : NetworkObject
     public LockerComponent Locker { get; }
     public StructurePositionSyncComponent StructurePositionSync { get; }
 
-    public RegularMedkitStructureObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public RegularMedkitStructureObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

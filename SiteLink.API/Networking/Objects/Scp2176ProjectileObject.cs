@@ -15,7 +15,7 @@ public class Scp2176ProjectileObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public Scp2176ProjectileComponent Scp2176Projectile { get; }
 
-    public Scp2176ProjectileObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public Scp2176ProjectileObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

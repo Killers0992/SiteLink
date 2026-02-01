@@ -15,7 +15,7 @@ public class Scp1509PickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public Scp1509PickupComponent Scp1509Pickup { get; }
 
-    public Scp1509PickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public Scp1509PickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

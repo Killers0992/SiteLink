@@ -17,7 +17,7 @@ public class SpawnableWorkStationStructureObject : NetworkObject
     public WorkstationControllerComponent WorkstationController { get; }
     public StructurePositionSyncComponent StructurePositionSync { get; }
 
-    public SpawnableWorkStationStructureObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public SpawnableWorkStationStructureObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[3];

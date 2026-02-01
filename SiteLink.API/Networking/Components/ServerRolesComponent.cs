@@ -14,6 +14,8 @@ public class ServerRolesComponent : BehaviourComponent
 
     private string _globalBadgeSignature;
 
+    private bool _hideFromPlayerList;
+
     public string MyText
     {
         get => _myText;
@@ -54,6 +56,16 @@ public class ServerRolesComponent : BehaviourComponent
         }
     }
 
+    public bool HideFromPlayerList
+    {
+        get => _hideFromPlayerList;
+        set
+        {
+            SetSyncVarDirtyBit(16);
+            _hideFromPlayerList = value;
+        }
+    }
+
     public ServerRolesComponent(NetworkObject networkObject) : base(networkObject)
     {
         //
@@ -68,6 +80,7 @@ public class ServerRolesComponent : BehaviourComponent
             writer.WriteString(_myColor);
             writer.WriteString(_globalBadge);
             writer.WriteString(_globalBadgeSignature);
+            writer.WriteBool(_hideFromPlayerList);
             return;
         }
 
@@ -89,6 +102,11 @@ public class ServerRolesComponent : BehaviourComponent
         if ((SyncVarDirtyBits & 8U) != 0)
         {
             writer.WriteString(_globalBadgeSignature);
+        }
+
+        if ((SyncVarDirtyBits & 16U) != 0)
+        {
+            writer.WriteBool(_hideFromPlayerList);
         }
     }
 }

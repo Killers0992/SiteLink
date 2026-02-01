@@ -14,7 +14,7 @@ public class PrismaticCloudObject : NetworkObject
 
     public override uint AssetId { get; } = ObjectAssetId;
 
-    public PrismaticCloudObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public PrismaticCloudObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[0];

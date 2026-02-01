@@ -15,7 +15,7 @@ public class ElevatorChamberGatesObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public ElevatorChamberComponent ElevatorChamber { get; }
 
-    public ElevatorChamberGatesObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public ElevatorChamberGatesObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

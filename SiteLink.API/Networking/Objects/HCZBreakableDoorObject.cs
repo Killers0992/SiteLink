@@ -16,7 +16,7 @@ public class HCZBreakableDoorObject : NetworkObject
     public BreakableDoorComponent BreakableDoor { get; }
     public WallableSmallNodeRoomConnectorComponent WallableSmallNodeRoomConnector { get; }
 
-    public HCZBreakableDoorObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public HCZBreakableDoorObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

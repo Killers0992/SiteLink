@@ -2,14 +2,14 @@
 
 public class ClientConnectionResponseEvent : BaseCancellableEvent
 {
-    public ClientConnectionResponseEvent(Client client, Server server, IDisconnectResponse response)
+    public ClientConnectionResponseEvent(Connection connection, Server server, IDisconnectResponse response)
     {
-        Client = client;
+        Connection = connection;
         Server = server;
         Response = response;
     }
 
-    public Client Client { get; }
+    public Connection Connection { get; }
 
     public Server Server { get; }
 

@@ -15,7 +15,7 @@ public class CullableParentToyObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public SpawnableCullingParentComponent SpawnableCullingParent { get; }
 
-    public CullableParentToyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public CullableParentToyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

@@ -15,7 +15,7 @@ public class SinkholeObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public SinkholeEnvironmentalHazardComponent SinkholeEnvironmentalHazard { get; }
 
-    public SinkholeObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public SinkholeObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

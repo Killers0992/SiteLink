@@ -12,11 +12,13 @@ public class PlayersCommand
 
         foreach (var server in Server.List)
         {
-            sb.AppendLine($" - Server (f=cyan){server.Name}(f=white) [ (f=green){server.Clients.Count}(f=white) ] ((f=darkcyan){server}(f=white))");
+            Session[] sessions = server.GetSessionsSnapshot();
+
+            sb.AppendLine($" - Server (f=cyan){server.Name}(f=white) [ (f=green){sessions.Length}(f=white) ] ((f=darkcyan){server}(f=white))");
             sb.AppendLine($"  -> On Server  ");
-            foreach (var player in server.Clients)
+            foreach (Session session in sessions)
             {
-                sb.AppendLine($"  [(f=green){player.NetworkIdentityId}(f=white)] (f=cyan){player.PreAuth.UserId}(f=white) connection time (f=darkcyan){player.Connectiontime.ToReadableString()}(f=white)");
+                sb.AppendLine($"  [(f=green){session.NetworkId}(f=white)] (f=cyan){session.UserId}(f=white) connection time (f=darkcyan){session.SessionTime.ToReadableString()}(f=white)");
             }
         }
 

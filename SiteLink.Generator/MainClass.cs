@@ -446,7 +446,7 @@ public class MainClass : Plugin
         }
 
         sb.AppendLine();
-        sb.AppendLine($"    public {className}(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)");
+        sb.AppendLine($"    public {className}(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)");
         sb.AppendLine("    {");
         sb.AppendLine("        //");
         sb.AppendLine($"        Behaviours = new BehaviourComponent[{behaviourInfos.Count}];");

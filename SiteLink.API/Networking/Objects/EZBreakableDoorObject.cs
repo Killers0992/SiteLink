@@ -16,7 +16,7 @@ public class EZBreakableDoorObject : NetworkObject
     public BreakableDoorComponent BreakableDoor { get; }
     public SpawnableRoomConnectorComponent SpawnableRoomConnector { get; }
 
-    public EZBreakableDoorObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public EZBreakableDoorObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

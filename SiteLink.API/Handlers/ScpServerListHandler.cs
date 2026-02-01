@@ -243,7 +243,7 @@ public class ScpServerListHandler
 
             listener.ServerListUpdate = listener.ForceServerListUpdate || listener.ServerListCycle == 10;
 
-            string playersStr = $"{listener.ConnectedClients.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
+            string playersStr = $"{listener.Connections.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
 
             if (!string.IsNullOrEmpty(listener.Settings.ServerList.TakePlayerCountFromServer))
             {
@@ -255,7 +255,7 @@ public class ScpServerListHandler
                 }
                 else
                 {
-                    playersStr = $"{targetServer.ClientsCount}/{targetServer.MaxClientsCount}";
+                    playersStr = $"{targetServer.SessionsCount}/{targetServer.MaxSessions}";
                 }
             }
 

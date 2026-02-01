@@ -1,6 +1,7 @@
 ﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Networking.Common;
+using System.Linq;
 
 namespace SiteLink.API.Core;
 
@@ -65,10 +66,11 @@ public class World : IDisposable
     private readonly Thread _updateThread;
     private readonly CancellationTokenSource _cts = new();
 
-    private readonly List<Client> _clients = new();
+    private readonly List<Session> _sessions = new();
+
     private int _clientsVersion = 0;
 
-    private readonly ThreadLocal<(int version, IReadOnlyList<Client> snapshot)> _clientsSnapshotCache
+    private readonly ThreadLocal<(int version, IReadOnlyList<Session> snapshot)> _clientsSnapshotCache
         = new(() => (-1, null));
 
     /// <summary>
@@ -188,21 +190,21 @@ public class World : IDisposable
     /// <summary>
     /// Loads a client into the world.
     /// </summary>
-    public bool Load(Client client)
+    public bool Load(Session session)
     {
         bool result;
         _lock.EnterWriteLock();
         try
         {
-            if (_clients.Contains(client))
+            if (_sessions.Contains(session))
                 return false;
 
-            OnLoad(client);
+            OnLoad(session);
 
-            _clients.Add(client);
+            _sessions.Add(session);
             _clientsVersion++;
 
-            SiteLinkLogger.Info($"{client.Tag} Loaded world (f=green){this}(f=white)");
+            SiteLinkLogger.Info($"{session.Connection.Tag} Loaded world (f=green){this}(f=white)");
 
             result = true;
         }
@@ -211,9 +213,9 @@ public class World : IDisposable
             _lock.ExitWriteLock();
         }
         
-        SpawnObjectsForClient(client);
+        SpawnObjectsForSession(session);
 
-        EventManager.Client.InvokeLoadedWorld(new ClientLoadedWorldEvent(client, this));
+        //EventManager.Client.InvokeLoadedWorld(new ClientLoadedWorldEvent(client, this));
 
         return result;
     }
@@ -221,21 +223,21 @@ public class World : IDisposable
     /// <summary>
     /// Unloads a client from the world.
     /// </summary>
-    public bool Unload(Client client, World targetWorld = null)
+    public bool Unload(Session session, World targetWorld = null)
     {
-        DestroyObjectsForClient(client, targetWorld);
+        DestroyObjectsForSession(session, targetWorld);
 
         _lock.EnterWriteLock();
         try
         {
-            if (!_clients.Contains(client))
+            if (!_sessions.Contains(session))
                 return false;
 
-            OnUnload(client);
-            _clients.Remove(client);
+            OnUnload(session);
+            _sessions.Remove(session);
             _clientsVersion--;
 
-            SiteLinkLogger.Info($"{client.Tag} Unloaded world (f=green){this}(f=white)");
+            SiteLinkLogger.Info($"{session.Connection.Tag} Unloaded world (f=green){this}(f=white)");
         }
         finally
         {
@@ -245,7 +247,7 @@ public class World : IDisposable
         if (GetClientsSnapshot().Count == 0 && DestroyOnEmpty)
             Dispose();
 
-        EventManager.Client.InvokeUnloadedWorld(new ClientUnloadedWorldEvent(client, this));
+        //EventManager.Client.InvokeUnloadedWorld(new ClientUnloadedWorldEvent(session, this));
 
         return true;
     }
@@ -253,7 +255,7 @@ public class World : IDisposable
     /// <summary>
     /// Spawns all objects for a client.
     /// </summary>
-    public void SpawnObjectsForClient(Client client)
+    public void SpawnObjectsForSession(Session session)
     {
         _lock.EnterReadLock();
         try
@@ -262,7 +264,7 @@ public class World : IDisposable
             {
                 // Spawn objects for client.
                 //SiteLinkLogger.Info($"Spawn {obj.Value.GetType().Name} for {client.PreAuth.UserId}");
-                obj.Value.SpawnWithPayload(client);
+                obj.Value.SpawnWithPayload(session);
             }
         }
         finally
@@ -271,10 +273,10 @@ public class World : IDisposable
         }
 
         // Call outside the lock to avoid recursion
-        OnObjectsSpawned(client);
+        OnObjectsSpawned(session);
     }
 
-    public void DestroyObjectsForClient(Client client, World targetWorld)
+    public void DestroyObjectsForSession(Session session, World targetWorld)
     {
         _lock.EnterReadLock();
         try
@@ -286,10 +288,10 @@ public class World : IDisposable
                     pObject.MoveToWorld(targetWorld);
 
                     if (targetWorld == null)
-                        pObject.Owner.Object = null;
+                        pObject.Owner.PlayerObject = null;
                 }
                 else
-                    obj.Value.Destroy(client);
+                    obj.Value.Destroy(session);
             }
         }
         finally
@@ -301,11 +303,11 @@ public class World : IDisposable
     /// <summary>
     /// Returns a thread-local snapshot of the current clients. The snapshot is reused for the same thread if the list hasn't changed.
     /// </summary>
-    public IReadOnlyList<Client> GetClientsSnapshot()
+    public IReadOnlyList<Session> GetClientsSnapshot()
     {
         var cache = _clientsSnapshotCache.Value;
         int currentVersion;
-        List<Client> snapshot = null;
+        List<Session> snapshot = null;
 
         _lock.EnterReadLock();
         try
@@ -314,7 +316,7 @@ public class World : IDisposable
             if (cache.version == currentVersion && cache.snapshot != null)
                 return cache.snapshot;
 
-            snapshot = [.. _clients];
+            snapshot = [.. _sessions];
         }
         finally
         {
@@ -326,19 +328,19 @@ public class World : IDisposable
     }
 
     /// <summary>
-    /// Called when a client loads the world.
+    /// Called when a session loads the world.
     /// </summary>
-    public virtual void OnLoad(Client client) { }
+    public virtual void OnLoad(Session session) { }
 
     /// <summary>
-    /// Called after all objects are spawned for a client.
+    /// Called after all objects are spawned for a session.
     /// </summary>
-    public virtual void OnObjectsSpawned(Client client) { }
+    public virtual void OnObjectsSpawned(Session session) { }
 
     /// <summary>
-    /// Called when a client unloads the world.
+    /// Called when a session unloads the world.
     /// </summary>
-    public virtual void OnUnload(Client client) { }
+    public virtual void OnUnload(Session session) { }
 
     public virtual void OnDestroy() { }
 

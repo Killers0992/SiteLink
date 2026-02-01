@@ -15,7 +15,7 @@ public class HegProjectileObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public ExplosionGrenadeComponent ExplosionGrenade { get; }
 
-    public HegProjectileObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public HegProjectileObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

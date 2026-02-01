@@ -24,4 +24,5 @@ public enum DisconnectType : byte
     InvalidSignature,
     BadSignature,
     ServerIsFull,
+    Banned,
 }

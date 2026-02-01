@@ -1,14 +1,12 @@
 ﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
+using System.Buffers;
 
 namespace SiteLink.API.Networking;
 
 public class Listener
 {
     public const int PoolingDelayMs = 10;
-
-    public static Dictionary<string, Client> ClientByUserId = new Dictionary<string, Client>();
-    //public static Dictionary<string, Client> ClientByName = new Dictionary<string, Client>();
 
     public static CancellationToken Token;
 
@@ -36,21 +34,9 @@ public class Listener
         ListenersByName.TryRemove(name, out _);
     }
 
-    public static void RegisterClientInLookup(Client client)
-    {
-        if (ClientByUserId.ContainsKey(client.PreAuth.UserId))
-            ClientByUserId[client.PreAuth.UserId] = client;
-        else
-            ClientByUserId.Add(client.PreAuth.UserId, client);
-    }
-
-    public static void UnregisterClientInLookup(Client client)
-    {
-        if (ClientByUserId.ContainsKey(client.PreAuth.UserId))
-            ClientByUserId.Remove(client.PreAuth.UserId);
-    }
-
     public SessionManager SessionManager { get; } = new SessionManager();
+
+    private readonly BatchInterceptor _clientToServer = new();
 
     private string _version;
     private Version _parsedGameVersion;
@@ -58,8 +44,9 @@ public class Listener
     private HttpClient _httpClient;
     private NetManager _manager;
     private EventBasedNetListener _listener;
-    private Queue<Client> _clientsToRemove = new Queue<Client>();
     private int _index = -1;
+
+    private Queue<Connection> _connectionsToRemove = new Queue<Connection>();
 
     public string Name { get; }
 
@@ -98,8 +85,9 @@ public class Listener
         }
     }
 
-    public List<Client> NotConnectedClients = new List<Client>();
-    public Dictionary<int, Client> ConnectedClients = new Dictionary<int, Client>();
+    public List<Connection> PendingConnections { get; } = new List<Connection>();
+
+    public Dictionary<int, Connection> Connections { get; } = new Dictionary<int, Connection>();
 
     public string Tag => $"[(f=cyan){Name}(f=white)]";
 
@@ -122,6 +110,7 @@ public class Listener
     public bool ForceServerListUpdate;
 
     public bool ServerListUpdate;
+
     public int ServerListCycle;
 
     public Listener(string name)
@@ -190,57 +179,59 @@ public class Listener
     {
         while (!token.IsCancellationRequested)
         {
-            try
-            {
-                _manager.PollEvents();
-                _manager.ManualUpdate(PoolingDelayMs);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
+            UpdateNetwork();
 
             SessionManager?.Update();
 
-            foreach (Client client in NotConnectedClients)
-            {
-                if (client.IsDisposing)
-                {
-                    //ProxyLogger.Info("Dispose not connected client " + client.PreAuth.UserId);
-                    _clientsToRemove.Enqueue(client);
-                    continue;
-                }
+            UpdateConnections(Connections.Values);
+            UpdateConnections(PendingConnections);
 
-                try
-                {
-                    client.PollEvents();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex);
-                }
-            }
-
-            while(_clientsToRemove.Count > 0)
-            {
-                NotConnectedClients.Remove(_clientsToRemove.Dequeue());
-            }
-
-            foreach (Client client in ConnectedClients.Values)
-            {
-                try
-                {
-                    client.PollEvents();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex);
-                }
-            }
+            RemoveConnections();
 
             await Task.Delay(PoolingDelayMs, token);
         }
+    }
 
+    void UpdateNetwork()
+    {
+        try
+        {
+            _manager.PollEvents();
+            _manager.ManualUpdate(PoolingDelayMs);
+        }
+        catch (Exception ex)
+        {
+            SiteLinkLogger.Error("Failed to poll network events:\n" + ex);
+        }
+    }
+
+    void UpdateConnections(ICollection<Connection> connections)
+    {
+        foreach (Connection connection in connections)
+        {
+            if (connection.IsDisposed)
+            {
+                _connectionsToRemove.Enqueue(connection);
+                continue;
+            }
+
+            try
+            {
+                connection.Update();
+            }
+            catch (Exception ex)
+            {
+                SiteLinkLogger.Error($"Failed to update connection {connection}:\n{ex}");
+            }
+        }
+    }
+
+    void RemoveConnections()
+    {
+        while (_connectionsToRemove.Count > 0)
+        {
+            PendingConnections.Remove(_connectionsToRemove.Dequeue());
+        }
     }
 
     void OnConnectionRequest(ConnectionRequest request)
@@ -275,63 +266,65 @@ public class Listener
         if (ev.IsCancelled)
             return;
 
-        OnClientConnected(new Client(this, request, preAuth));
+        Connection connection = new Connection(this, request, preAuth);
+
+        SiteLinkLogger.Info($"{connection.Tag} Connected to listener ( Ip Address (f=cyan){connection.PreAuth.IpAddress}(f=white), Game Version (f=cyan){connection.PreAuth.ClientVersion.ToString(3)}(f=white) )");
+
+        if (SessionManager.TryReattachConnection(connection))
+            return;
+
+        connection.Connect(Priorities);
     }
 
     void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
     {
-        if (!ConnectedClients.TryGetValue(peer.Id, out Client client))
+        if (!Connections.TryGetValue(peer.Id, out Connection connection))
+            return;
+
+        if (connection.Session == null)
             return;
 
         byte[] bytes = reader.RawData;
-        int pos = reader.Position;
+        int position = reader.Position;
         int length = reader.AvailableBytes;
 
-        if (!client.ProcessMirrorDataFromListener(ref bytes, ref pos, ref length))
+        if (!_clientToServer.TryRewrite(connection.Session, bytes, position, length, out var outBytes, out var outPos, out var outLen, out bool pooled))
+        {
+            connection.Session.SendToServer(bytes, position, length, deliveryMethod);
             return;
+        }
 
-        client?.Session.Send(bytes, pos, length, deliveryMethod);
+        connection.Session.SendToServer(outBytes, outPos, outLen, deliveryMethod);
+
+        if (!ReferenceEquals(outBytes, bytes))
+            ArrayPool<byte>.Shared.Return(outBytes);
     }
 
     void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
-        if (!ConnectedClients.TryGetValue(peer.Id, out Client client))
+        if (!Connections.TryGetValue(peer.Id, out Connection connection))
             return;
 
-        OnClientDisconneted(client, disconnectInfo.Reason);
-
-        client.World = null;
+        Connections.Remove(peer.Id);
 
         switch (disconnectInfo.Reason)
         {
             case DisconnectReason.RemoteConnectionClose:
-                SiteLinkLogger.Info($"{client.Tag} Client closed the connection!");
+                SiteLinkLogger.Info($"{connection.Tag} Client closed the connection!");
                 break;
             default:
-                SiteLinkLogger.Info($"{client.Tag} Disconnected");
+                SiteLinkLogger.Info($"{connection.Tag} Disconnected");
                 break;
         }
 
-        client.Dispose();
-    }
-
-    public virtual void OnClientConnected(Client client)
-    {
-        SiteLinkLogger.Info($"{client.Tag} Connected to listener ( Ip Address (f=cyan){client.PreAuth.IpAddress}(f=white), Game Version (f=cyan){client.PreAuth.ClientVersion.ToString(3)}(f=white) )");
-
-        client.Connect(Priorities);
-    }
-
-    public virtual void OnClientDisconneted(Client client, DisconnectReason reason)
-    {
-
+        connection.Dispose();
     }
 
     public void Destroy()
     {
-        foreach(Client client in ConnectedClients.Values)
+        foreach(Connection connection in Connections.Values)
         {
-            client.Disconnect("Listener shutdown");
+            connection.Disconnect("Listener shutdown");
         }
 
         SiteLinkLogger.Info($"{Tag} Listener unregistered.");

@@ -15,7 +15,7 @@ public class SCP1853PickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public CollisionDetectionPickupComponent CollisionDetectionPickup { get; }
 
-    public SCP1853PickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public SCP1853PickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

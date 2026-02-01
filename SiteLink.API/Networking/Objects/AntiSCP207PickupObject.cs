@@ -15,7 +15,7 @@ public class AntiSCP207PickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public CollisionDetectionPickupComponent CollisionDetectionPickup { get; }
 
-    public AntiSCP207PickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public AntiSCP207PickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

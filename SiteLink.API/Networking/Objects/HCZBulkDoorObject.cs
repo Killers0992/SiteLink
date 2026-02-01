@@ -16,7 +16,7 @@ public class HCZBulkDoorObject : NetworkObject
     public PryableDoorComponent PryableDoor { get; }
     public SpawnableRoomConnectorComponent SpawnableRoomConnector { get; }
 
-    public HCZBulkDoorObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public HCZBulkDoorObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

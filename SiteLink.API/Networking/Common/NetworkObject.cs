@@ -12,13 +12,13 @@ public class NetworkObject : IDisposable
     public Quaternion Rotation { get; set; } = Quaternion.identity;
     public Vector3 Scale { get; set; } = Vector3.one;
 
-    public Client Owner { get; private set; }
+    public Session Owner { get; private set; }
 
     public World World { get; private set; }
 
     public BehaviourComponent[] Behaviours { get; set; }
 
-    public NetworkObject(World world, Client owner, uint networkId = 0)
+    public NetworkObject(World world, Session owner, uint networkId = 0)
     {
         Owner = owner;
         World = world;
@@ -53,19 +53,19 @@ public class NetworkObject : IDisposable
         World = world;
     }
 
-    public void SendUpdate(Client client)
+    public void SendUpdate(Session session)
     {
         NetworkWriter wr2 = Serialize(false);
 
         if (wr2 == null)
             return;
 
-        NetworkWriter wr = new NetworkWriter();
-        wr.WriteUShort(NetworkMessageId<EntityStateMessage>.Id);
-        wr.WriteUInt(NetworkId);
-        wr.WriteArraySegmentAndSize(wr2.ToArraySegment());
-
-        client.SendMirrorData(wr);
+        session.Connection.AsServer.Send(w =>
+        {
+            w.WriteUShort(NetworkMessageId<EntityStateMessage>.Id);
+            w.WriteUInt(NetworkId);
+            w.WriteArraySegmentAndSize(wr2.ToArraySegment());
+        });
     }
 
     public void Deserialize(NetworkReader reader, bool intialState)
@@ -154,53 +154,43 @@ public class NetworkObject : IDisposable
         return bit;
     }
 
-    public void AssignOwner(Client owner)
+    public void AssignOwner(Session session)
     {
-        Owner = owner;
+        Owner = session;
     }
 
-    public void Destroy(Client client)
+    public void Destroy(Session session)
     {
-        client.DestroyObject(NetworkId);
+        session.Connection?.AsServer.Destroy(NetworkId);
     }
 
     public void Destroy()
     {
         if (Owner != null)
-            Owner.DestroyObject(NetworkId);
+            Owner.Connection?.AsServer.Destroy(NetworkId);
 
         Dispose();
     }
 
-    public void SpawnWithPayload(Client client)
+    public void SpawnWithPayload(Session session)
     {
         NetworkWriter wr2 = Serialize(true);
-        Spawn(client, wr2.ToArraySegment());
+
+        Spawn(session, wr2.ToArraySegment());
     }
 
-    public void Spawn(Client client, ArraySegment<byte> payload = default)
+    public void Spawn(Session session, ArraySegment<byte> payload = default)
     {
-        NetworkWriter wr = new NetworkWriter();
-
-        wr.WriteUShort(NetworkMessageId<SpawnMessage>.Id);
-
-        wr.WriteUInt(NetworkId);
-
-        // IsLocalPlayer
-        wr.WriteBool(Owner == client);
-        // IsOwner
-        wr.WriteBool(Owner == client);
-
-        wr.WriteULong(SceneId);
-        wr.WriteUInt(AssetId);
-
-        wr.WriteVector3(Position);
-        wr.WriteQuaternion(Rotation);
-        wr.WriteVector3(Scale);
-
-        wr.WriteArraySegmentAndSize(payload);
-
-        client.SendMirrorData(wr);
+        session.Connection.AsServer.Spawn(
+            NetworkId,
+            Owner == session,
+            Owner == session,
+            SceneId,
+            AssetId,
+            Position,
+            Rotation,
+            Scale,
+            payload);
     }
 
     public virtual void OnReceiveCommand(byte componentIndex, ushort functionHash, ArraySegment<byte> payload = default)

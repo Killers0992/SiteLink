@@ -118,9 +118,9 @@ public class WaypointToyComponent : BehaviourComponent
     {
         if (forceAll)
         {
-            writer.WriteVector3(Object.Position);
-            writer.WriteQuaternion(Object.Rotation);
-            writer.WriteVector3(Object.Scale);
+            writer.WriteVector3(_position);
+            writer.WriteQuaternion(_rotation);
+            writer.WriteVector3(_scale);
             writer.WriteByte(_movementSmoothing);
             writer.WriteBool(_isStatic);
             writer.WriteBool(_visualizeBounds);

@@ -15,7 +15,7 @@ public class RadioPickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public RadioPickupComponent RadioPickup { get; }
 
-    public RadioPickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public RadioPickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

@@ -11,7 +11,7 @@ public class PositionCommand
             return;
         }
 
-        string userId = args[0];
+        /*string userId = args[0];
 
         if (!Client.TryGet(userId, out Client client))
         {
@@ -19,6 +19,6 @@ public class PositionCommand
             return;
         }
 
-        SiteLinkLogger.Info($"Current position for (f=green){userId}(f=white), pos (f=cyan){client.Position}(f=white), rot horizontal (f=cyan){client.HorizontalRotation}(f=white) vertical (f=cyan){client.VerticalRotation}(f=white)", "position");
+        SiteLinkLogger.Info($"Current position for (f=green){userId}(f=white), pos (f=cyan){client.Position}(f=white), rot horizontal (f=cyan){client.HorizontalRotation}(f=white) vertical (f=cyan){client.VerticalRotation}(f=white)", "position");*/
     }
 }

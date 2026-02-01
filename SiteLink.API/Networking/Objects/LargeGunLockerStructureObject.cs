@@ -16,7 +16,7 @@ public class LargeGunLockerStructureObject : NetworkObject
     public LockerComponent Locker { get; }
     public StructurePositionSyncComponent StructurePositionSync { get; }
 
-    public LargeGunLockerStructureObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public LargeGunLockerStructureObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

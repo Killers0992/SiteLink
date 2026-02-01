@@ -15,7 +15,7 @@ public class EzArmCameraToyObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public Scp079CameraToyComponent Scp079CameraToy { get; }
 
-    public EzArmCameraToyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public EzArmCameraToyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];
