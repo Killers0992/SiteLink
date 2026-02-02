@@ -38,7 +38,7 @@ public class ReloadCommand
 
         foreach (string listener in addedListeners)
         {
-            Listener.Register(new Listener(listener));
+            new Listener(listener);
         }
 
         foreach(Plugin plugin in PluginsManager.AssemblyToPlugin.Values)

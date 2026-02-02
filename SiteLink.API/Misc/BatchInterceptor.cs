@@ -6,9 +6,31 @@ namespace SiteLink.API.Misc
 
     public sealed class BatchInterceptor
     {
+        public PacketDirection Direction { get; }
+
         private readonly MessageHandler?[] _handlers = new MessageHandler?[ushort.MaxValue + 1];
 
+        public BatchInterceptor(PacketDirection direction)
+        {
+            Direction = direction;
+        }
+
         public void Register(ushort id, MessageHandler handler) => _handlers[id] = handler;
+
+        private static string FormatBytes(long bytes)
+        {
+            const long KB = 1024;
+            const long MB = KB * 1024;
+            const long GB = MB * 1024;
+
+            return bytes switch
+            {
+                >= GB => $"{bytes / (double)GB:F2} GB",
+                >= MB => $"{bytes / (double)MB:F2} MB",
+                >= KB => $"{bytes / (double)KB:F2} KB",
+                _ => $"{bytes} B"
+            };
+        }
 
         public bool TryRewrite(
             Session session,
@@ -35,15 +57,28 @@ namespace SiteLink.API.Misc
                 int size = (int)Compression.DecompressVarUInt(r);
                 if (r.Remaining < size) break;
 
-                var msg = r.ReadBytesSegment(size);
+                ArraySegment<byte> msg = r.ReadBytesSegment(size);
 
-                var mr = new NetworkReader(msg);
+                NetworkReader mr = new NetworkReader(msg);
                 if (!Mirror.NetworkMessages.UnpackId(mr, out ushort id))
                 {
                     kept ??= new(16);
                     kept.Add(msg);
                     continue;
                 }
+
+                /*switch (id)
+                {
+
+                    case NetworkMessages.NetworkPongMessage:
+                    case NetworkMessages.NetworkPingMessage:
+                    case NetworkMessages.FpcPositionMessage:
+                    case NetworkMessages.TimeSnapshotMessage:
+                        break;
+                    default:
+                        SiteLinkLogger.Info(NetworkMessages.GetMessageName(id) + $" {FormatBytes(size)} ", Direction.ToString());
+                        break;
+                }*/
 
                 var h = _handlers[id];
                 if (h == null)

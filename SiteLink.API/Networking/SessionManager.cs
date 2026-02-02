@@ -2,10 +2,16 @@
 {
     public class SessionManager
     {
-        // Sessions expire after 10 seconds by default
+        public static SessionManager Singleton { get; private set; }
+
         private const double DefaultSessionExpirationSeconds = 10.0;
 
         public ConcurrentDictionary<string, SessionSlot> Slots { get; } = new();
+
+        public SessionManager()
+        {
+            Singleton = this;
+        }
 
         public void Update()
         {
@@ -128,7 +134,7 @@
                 slot.Pending?.Disconnect("Replaced by newer pending session");
                 slot.Pending?.Dispose();
 
-                slot.Pending = new Session(connection, servers);
+                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId);
                 WireSessionCallbacks(slot.Pending, connection, isPending: true);
 
                 //SiteLinkLogger.Info($"{connection.Tag} Created PENDING session to switch servers.");
@@ -140,7 +146,7 @@
             slot.Active?.Disconnect("Active session replaced");
             slot.Active?.Dispose();
 
-            slot.Active = new Session(connection, servers);
+            slot.Active = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId);
             WireSessionCallbacks(slot.Active, connection, isPending: false);
 
             slot.Active.AttachToConnection(connection);

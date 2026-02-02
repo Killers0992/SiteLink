@@ -124,9 +124,9 @@ public class Server
         SiteLinkLogger.Info($"{Tag} Server registered under ip (f=green){IpAddress}:{Port}(f=white)");
     }
 
-    public bool InternalSessionConnecting(Session session) => OnSessionConnecting(session);
+    internal bool InternalSessionConnecting(Session session) => OnSessionConnecting(session);
 
-    public bool InternalSessionConnected(Session session)
+    internal bool InternalSessionConnected(Session session)
     {
         if (_sessions.TryAdd(session, 0))
         {
@@ -137,7 +137,7 @@ public class Server
         return false;
     }
 
-    public bool InternalSessionDisconnected(Session session)
+    internal bool InternalSessionDisconnected(Session session)
     {
         if (_sessions.TryRemove(session, out _))
         {
@@ -148,6 +148,8 @@ public class Server
         return false;
     }
 
+    internal void InternalSessionReady(Session session) => OnSessionReady(session);
+
     public virtual bool OnSessionConnecting(Session session) => false;
 
     public virtual void OnSessionConnected(Session session) { }
@@ -155,6 +157,8 @@ public class Server
     public virtual void OnSessionDisconnected(Session session) { }
 
     public virtual void OnSessionSSSReponse(Session session, int id) { }
+
+    public virtual void OnSessionReady(Session session) { }
 
     public virtual void OnUpdate() { }
 

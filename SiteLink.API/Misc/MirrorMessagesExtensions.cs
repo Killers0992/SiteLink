@@ -2,11 +2,14 @@
 using Mirror;
 using SiteLink.API.Networking;
 using UnityEngine.SceneManagement;
+using UserSettings.ServerSpecific;
 
 namespace SiteLink.API.Misc
 {
     public static class MirrorMessagesEx
     {
+        static int _entriesVersion;
+
         public static void Spawn(this MirrorSender sender, uint networkId, bool isLocalPlayer, bool isOwner, ulong sceneId, uint assetId, Vector3 position, Quaternion rotation, Vector3 scale, ArraySegment<byte> payload)
         {
             sender.Send(w =>
@@ -100,6 +103,17 @@ namespace SiteLink.API.Misc
                 w.WriteUShort(NetworkMessages.ObjectDestroyMessage);
 
                 w.WriteUInt(networkIdentityId);
+            });
+        }
+
+        public static void ServerSpecificEntries(this MirrorSender sender, ServerSpecificSettingBase[] entires)
+        {
+            sender.Send(w =>
+            {
+                SSSEntriesPack packed = new SSSEntriesPack(entires, _entriesVersion++);
+
+                w.WriteUShort(NetworkMessages.SSSEntriesPack);
+                packed.Serialize(w);
             });
         }
     }

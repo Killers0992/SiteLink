@@ -1,5 +1,9 @@
-﻿namespace SiteLink.API.Networking
+﻿using SiteLink.API.Metrics;
+using SiteLink.API.Threading;
+
+namespace SiteLink.API.Networking
 {
+    [ThreadAffined("Listener")]
     public class Connection : IDisposable
     {
         public static Dictionary<string, Connection> ConnectionByUserId = new Dictionary<string, Connection>();
@@ -7,6 +11,10 @@
         public static bool TryGet(string userId, out Connection connection) => ConnectionByUserId.TryGetValue(userId, out connection);
 
         private static int ThresholdBytes => 65535 * (NetConstants.MaxPacketSize - 6);
+
+        private readonly int _ownerThreadId;
+
+        public ConnectionStats Stats { get; } = new ConnectionStats();
 
         private Session _session;
 
@@ -69,6 +77,9 @@
 
             PreAuth = preAuth;
 
+            _ownerThreadId = Thread.CurrentThread.ManagedThreadId;
+            ThreadOwner.Register(this, listener.Name, _ownerThreadId);
+
             ConnectionByUserId.Add(PreAuth.UserId, this);
 
             AsServer = new MirrorSender(
@@ -100,7 +111,7 @@
 
             Peer = Request.Accept();
 
-            Listener.Connections.Add(Peer.Id, this);
+            Listener.Connections.TryAdd(Peer.Id, this);
 
             Request = null;
         }
@@ -110,6 +121,7 @@
             if (Peer == null)
                 return;
 
+            Stats.RecordBytesSent(length);
             Peer.Send(bytes, position, length, method);
         }
 
@@ -119,6 +131,12 @@
         /// <param name="name">The server name.</param>
         public void Connect(string name)
         {
+            ThreadOwner.Verify(this);
+            ConnectInternal(name);
+        }
+
+        private void ConnectInternal(string name)
+        {
             Server server = Server.Get<Server>(name: name);
 
             if (server == null)
@@ -127,7 +145,7 @@
                 return;
             }
 
-            Connect(server);
+            ConnectInternal(server);
         }
 
         /// <summary>
@@ -136,16 +154,44 @@
         /// <param name="servers">The server names.</param>
         public void Connect(string[] servers)
         {
+            ThreadOwner.Verify(this);
+            ConnectInternal(servers);
+        }
+
+        private void ConnectInternal(string[] servers)
+        {
             SiteLinkLogger.Info($"{Tag} Connect to (f=yellow){string.Join("(f=white) -> (f=yellow)", servers)}(f=white)");
 
             Server[] serverObjs = Server.List.Where(x => servers.Contains(x.Name.ToLower())).ToArray();
 
-            Listener.SessionManager.CreateOrSwitchSession(this, serverObjs);
+            SessionManager.Singleton.CreateOrSwitchSession(this, serverObjs);
         }
 
         public void Connect(Server server)
         {
-            Listener.SessionManager.CreateOrSwitchSession(this, new[] { server });
+            ThreadOwner.Verify(this);
+            ConnectInternal(server);
+        }
+
+        private void ConnectInternal(Server server)
+        {
+            SessionManager.Singleton.CreateOrSwitchSession(this, new[] { server });
+        }
+
+        /// <summary>
+        /// Marshals an action to execute on this connection's owning thread (Listener polling thread).
+        /// </summary>
+        /// <param name="action">The action to execute.</param>
+        public void Execute(Action action)
+        {
+            if (Thread.CurrentThread.ManagedThreadId == _ownerThreadId)
+            {
+                action();
+            }
+            else
+            {
+                Scheduler.Execute(this, action);
+            }
         }
 
         public void Update()
@@ -193,10 +239,16 @@
 
         public void Dispose()
         {
+            ThreadOwner.Verify(this);
+            DisposeInternal();
+        }
+
+        private void DisposeInternal()
+        {
             if (IsSwitchingServers)
-                Listener.SessionManager.DetachClient(PreAuth.UserId, "switching servers");
+                SessionManager.Singleton.DetachClient(PreAuth.UserId, "switching servers");
             else
-                Listener.SessionManager.DestroyAllForUser(PreAuth.UserId, "Client disconnected from proxy");
+                SessionManager.Singleton.DestroyAllForUser(PreAuth.UserId, "Client disconnected from proxy");
 
             ConnectionByUserId.Remove(PreAuth.UserId);
 

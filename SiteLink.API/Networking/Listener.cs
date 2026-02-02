@@ -1,11 +1,22 @@
-﻿using SiteLink.API.Events;
+﻿using Mirror;
+using PlayerRoles.FirstPersonControl;
+using RelativePositioning;
+using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
+using SiteLink.API.Threading;
+using SiteLink.API.Metrics;
 using System.Buffers;
+using UserSettings.ServerSpecific;
 
 namespace SiteLink.API.Networking;
 
-public class Listener
-{
+public class Listener : IDisposable
+{        
+    /// <summary>
+    /// The inverse accuracy constant for position calculations.
+    /// </summary>
+    public const float InverseAccuracy = 0.00390625f;
+
     public const int PoolingDelayMs = 10;
 
     public static CancellationToken Token;
@@ -15,28 +26,7 @@ public class Listener
 
     public static bool TryGet(string name, out Listener listener) => ListenersByName.TryGetValue(name, out listener);
 
-    public static void Register(Listener listener)
-    {
-        ListenersByName.TryAdd(listener.Name, listener);
-
-        EventManager.Listener.InvokeListenerRegistered(new ListenerRegisteredEvent(listener));
-    }
-
-    public static void Unregister(string name)
-    {
-        if (!ListenersByName.TryGetValue(name, out Listener listener))
-            return;
-
-        listener.Destroy();
-
-        EventManager.Listener.InvokeListenerUnregistered(new ListenerUnregisteredEvent(listener));
-
-        ListenersByName.TryRemove(name, out _);
-    }
-
-    public SessionManager SessionManager { get; } = new SessionManager();
-
-    private readonly BatchInterceptor _clientToServer = new();
+    private readonly BatchInterceptor _clientToServer = new(PacketDirection.ClientToServer);
 
     private string _version;
     private Version _parsedGameVersion;
@@ -48,7 +38,12 @@ public class Listener
 
     private Queue<Connection> _connectionsToRemove = new Queue<Connection>();
 
+    private int _threadId;
+    private readonly ConcurrentQueue<Action> _workQueue = new();
+
     public string Name { get; }
+
+    public ListenerStats Stats { get; } = new ListenerStats();
 
     public ListenerSettings Settings
     {
@@ -87,7 +82,7 @@ public class Listener
 
     public List<Connection> PendingConnections { get; } = new List<Connection>();
 
-    public Dictionary<int, Connection> Connections { get; } = new Dictionary<int, Connection>();
+    public ConcurrentDictionary<int, Connection> Connections { get; } = new ConcurrentDictionary<int, Connection>();
 
     public string Tag => $"[(f=cyan){Name}(f=white)]";
 
@@ -132,6 +127,8 @@ public class Listener
             MaxConnectAttempts = 2,
         };
 
+        ListenersByName.TryAdd(Name, this);
+
         if (!_manager.StartInManualMode(IPAddress.Parse(ListenAddress), IPAddress.IPv6Any, ListenPort))
         {
             SiteLinkLogger.Info($"{Tag} Failed to start listener!", "Listener");
@@ -141,6 +138,83 @@ public class Listener
         Task.Run(() => RunEventPolling(Token), Token);
 
         SiteLinkLogger.Info($"{Tag} Listening for clients on (f=green){ListenAddress}:{ListenPort}(f=white), allow clients with game version (f=green){Settings.GameVersion.ParseVersion()}(f=white)");
+
+        EventManager.Listener.InvokeListenerRegistered(new ListenerRegisteredEvent(this));
+
+        _clientToServer.Register(NetworkMessages.ReadyMessage, static (id, r, original, session) =>
+        {
+            session.IsReady = true;
+
+            SiteLinkLogger.Info(session.Connection.Tag + $" Received ready message.");
+
+            return InterceptResult.Pass();
+        });
+
+        _clientToServer.Register(NetworkMessages.SSSClientResponse, static (id, r, original, session) =>
+        {
+            SSSClientResponse response = new SSSClientResponse(r);
+
+            session.Server?.OnSessionSSSReponse(session, response.Id);
+
+            return InterceptResult.Pass();
+        });
+
+        _clientToServer.Register(NetworkMessages.FpcFromClientMessage, static (id, r, original, session) =>
+        {
+            if (session.Server?.IsSimulated ?? false)
+                return InterceptResult.Pass();
+
+            byte code = r.ReadByte();
+
+            bool _bitMouseLook = false;
+            bool _bitPosition = false;
+            bool _bitCustom = false;
+
+            ushort _rotH, _rotV;
+
+            global::Misc.ByteToBools(code, out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
+
+            PlayerMovementState _state = (PlayerMovementState)global::Misc.BoolsToByte(b1, b2, b3, b4, b5);
+
+            if (_bitPosition)
+            {
+                byte waypointId = r.ReadByte();
+
+
+                short PositionX, PositionY, PositionZ;
+                if (waypointId > 0)
+                {
+                    PositionX = r.ReadShort();
+                    PositionY = r.ReadShort();
+                    PositionZ = r.ReadShort();
+
+                    session.WaypointId = waypointId;
+                    session.RelativePosition = new Vector3(PositionX * InverseAccuracy, PositionY * InverseAccuracy, PositionZ * InverseAccuracy);
+                }
+                else
+                {
+                    PositionX = 0;
+                    PositionY = 0;
+                    PositionZ = 0;
+                }
+            }
+
+            if (_bitMouseLook)
+            {
+                _rotH = r.ReadUShort();
+                _rotV = r.ReadUShort();
+            }
+            else
+            {
+                _rotH = 0;
+                _rotV = 0;
+            }
+
+            session.HorizontalRotation = Mathf.Lerp(0, 360, _rotH / (float)ushort.MaxValue);
+            session.VerticalRotation = Mathf.Lerp(-88f, 88f, _rotV / (float)ushort.MaxValue);
+
+            return InterceptResult.Pass();
+        });
     }
 
     public async Task Initialize()
@@ -177,18 +251,42 @@ public class Listener
 
     async Task RunEventPolling(CancellationToken token)
     {
+        _threadId = Thread.CurrentThread.ManagedThreadId;
+
+        Scheduler.RegisterThread(_threadId, Name, EnqueueWork);
+
         while (!token.IsCancellationRequested)
         {
             UpdateNetwork();
-
-            SessionManager?.Update();
 
             UpdateConnections(Connections.Values);
             UpdateConnections(PendingConnections);
 
             RemoveConnections();
 
+            ProcessWorkQueue();
+
             await Task.Delay(PoolingDelayMs, token);
+        }
+    }
+
+    private void EnqueueWork(Action callback)
+    {
+        _workQueue.Enqueue(callback);
+    }
+
+    private void ProcessWorkQueue()
+    {
+        while (_workQueue.TryDequeue(out var action))
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                SiteLinkLogger.Error($"Error processing work queue for {Name}: {ex}", Name);
+            }
         }
     }
 
@@ -268,9 +366,11 @@ public class Listener
 
         Connection connection = new Connection(this, request, preAuth);
 
+        Stats.RecordConnectionAccepted();
+
         SiteLinkLogger.Info($"{connection.Tag} Connected to listener ( Ip Address (f=cyan){connection.PreAuth.IpAddress}(f=white), Game Version (f=cyan){connection.PreAuth.ClientVersion.ToString(3)}(f=white) )");
 
-        if (SessionManager.TryReattachConnection(connection))
+        if (SessionManager.Singleton.TryReattachConnection(connection))
             return;
 
         connection.Connect(Priorities);
@@ -281,12 +381,16 @@ public class Listener
         if (!Connections.TryGetValue(peer.Id, out Connection connection))
             return;
 
+        int length = reader.AvailableBytes;
+        connection.Stats.RecordBytesReceived(length);
+        Stats?.RecordBytesReceived(length);
+        Stats?.RecordPacketsReceived(1);
+
         if (connection.Session == null)
             return;
 
         byte[] bytes = reader.RawData;
         int position = reader.Position;
-        int length = reader.AvailableBytes;
 
         if (!_clientToServer.TryRewrite(connection.Session, bytes, position, length, out var outBytes, out var outPos, out var outLen, out bool pooled))
         {
@@ -302,10 +406,10 @@ public class Listener
 
     void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
-        if (!Connections.TryGetValue(peer.Id, out Connection connection))
+        if (!Connections.TryRemove(peer.Id, out Connection connection))
             return;
 
-        Connections.Remove(peer.Id);
+        Stats.RecordConnectionError();
 
         switch (disconnectInfo.Reason)
         {
@@ -320,13 +424,17 @@ public class Listener
         connection.Dispose();
     }
 
-    public void Destroy()
+    public void Dispose()
     {
-        foreach(Connection connection in Connections.Values)
-        {
-            connection.Disconnect("Listener shutdown");
-        }
+        EventManager.Listener.InvokeListenerUnregistered(new ListenerUnregisteredEvent(this));
 
-        SiteLinkLogger.Info($"{Tag} Listener unregistered.");
+        _manager.Stop();
+        _manager = null;
+
+        _listener = null;
+
+        ListenersByName.TryRemove(Name, out _);
+
+        Console.WriteLine("Connections after dispose: " + Connections.Count);
     }
 }

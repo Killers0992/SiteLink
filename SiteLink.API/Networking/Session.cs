@@ -3,6 +3,8 @@ using Org.BouncyCastle.Utilities;
 using PlayerRoles.FirstPersonControl;
 using RelativePositioning;
 using SiteLink.API.Core;
+using SiteLink.API.Threading;
+using SiteLink.API.Metrics;
 using SiteLink.Core;
 using System.Buffers;
 using UserSettings.ServerSpecific;
@@ -19,6 +21,7 @@ namespace SiteLink.API.Networking
         Retrying,
     }
 
+    [ThreadAffined("SessionService")]
     public class Session : IDisposable
     {
         public class ServerFullResponse
@@ -44,6 +47,8 @@ namespace SiteLink.API.Networking
             public Server Server { get; }
             public byte Offset { get; }
         }
+
+        private readonly int _ownerThreadId;
 
         public class ServerOfflineResponse
         {
@@ -71,14 +76,11 @@ namespace SiteLink.API.Networking
             public DateTime Expires { get; }
         }
 
-        /// <summary>
-        /// The inverse accuracy constant for position calculations.
-        /// </summary>
-        public const float InverseAccuracy = 0.00390625f;
-
         private World _world;
 
         public PlayerObject PlayerObject { get; set; }
+
+        public SessionStats Stats { get; } = new SessionStats();
 
         /// <summary>
         /// Gets or sets the world this client is currently in.
@@ -113,22 +115,22 @@ namespace SiteLink.API.Networking
         /// <summary>
         /// Gets the waypoint ID associated with this client.
         /// </summary>
-        public byte WaypointId { get; private set; }
+        public byte WaypointId { get; internal set; }
 
         /// <summary>
         /// Current horizontal rotation.
         /// </summary>
-        public float HorizontalRotation { get; private set; }
+        public float HorizontalRotation { get; internal set; }
 
         /// <summary>
         /// Current vertical rotation.
         /// </summary>
-        public float VerticalRotation { get; private set; }
+        public float VerticalRotation { get; internal set; }
 
         /// <summary>
         /// Gets the current relative position of the client.
         /// </summary>
-        public Vector3 RelativePosition { get; private set; }
+        public Vector3 RelativePosition { get; internal set; }
 
         /// <summary>
         /// Gets the absolute position of the client in the world.
@@ -148,7 +150,7 @@ namespace SiteLink.API.Networking
         }
 
         private WeakReference<Connection> _connectionReference;
-        private readonly BatchInterceptor _serverToClient = new();
+        private readonly BatchInterceptor _serverToClient = new(PacketDirection.ServerToClient);
 
         public Connection Connection
         {
@@ -217,6 +219,7 @@ namespace SiteLink.API.Networking
 
         public int MapSeed { get; private set; } = -1;
 
+        public bool IsReady { get; internal set; }
         public bool IsConnectionConnected => Connection != null;
         public bool IsConnectedToSimulated { get; private set; }
 
@@ -238,9 +241,17 @@ namespace SiteLink.API.Networking
         /// </summary>
         public TimeSpan SessionTime => DateTime.Now - CreatedOn;
 
-        public Session(Connection connection, Server[] servers)
+        /// <summary>
+        /// Gets the thread ID that owns this session.
+        /// </summary>
+        public int OwnerThreadId => _ownerThreadId;
+
+        public Session(Connection connection, Server[] servers, int ownerThreadId)
         {
             Connection = connection;
+
+            _ownerThreadId = ownerThreadId;
+            ThreadOwner.Register(this, "SessionService", _ownerThreadId);
 
             ConnectToServers = new Queue<Server>(servers);
 
@@ -268,6 +279,22 @@ namespace SiteLink.API.Networking
             IsDetached = false;
         }
 
+        /// <summary>
+        /// Marshals an action to execute on this session's owning thread (SessionService thread).
+        /// </summary>
+        /// <param name="action">The action to execute.</param>
+        public void Execute(Action action)
+        {
+            if (Thread.CurrentThread.ManagedThreadId == _ownerThreadId)
+            {
+                action();
+            }
+            else
+            {
+                Scheduler.Execute(this, action);
+            }
+        }
+
         public void DetachFromConnection()
         {
             Connection = null;
@@ -292,7 +319,7 @@ namespace SiteLink.API.Networking
                         new ServerFullResponse(ConnectingToServer, ConnectToServers.Count == 0)
                     );
 
-                    Connection?.Listener.SessionManager.FailPending(
+                    SessionManager.Singleton.FailPending(
                         Connection?.PreAuth.UserId,
                         this,
                         "Simulated server rejected connection"
@@ -316,6 +343,8 @@ namespace SiteLink.API.Networking
 
         public void RetryConnect(TimeSpan delay)
         {
+            Stats.RecordReconnection();
+
             Status = SessionStatus.Retrying;
 
             NextRetry = DateTime.Now.Add(delay);
@@ -327,6 +356,7 @@ namespace SiteLink.API.Networking
             if (_netManager == null)
                 return;
 
+            Stats.RecordBytesToServer(length);
             _netManager.FirstPeer.Send(data, offset, length, method);
         }
 
@@ -369,6 +399,8 @@ namespace SiteLink.API.Networking
 
         private void FinalizeConnection(Server server, bool isSimulated)
         {
+            Stats.RecordConnected();
+
             Status = SessionStatus.Connected;
             Server = server;
 
@@ -383,7 +415,9 @@ namespace SiteLink.API.Networking
             // If client already has an active session, this is a pending switch attempt
             if (Connection.Session != null && Connection.Session != this)
             {
-                Connection.Listener.SessionManager.PromotePendingToActive(
+                Connection.Session.Stats.RecordServerSwitch();
+
+                SessionManager.Singleton.PromotePendingToActive(
                     Connection.PreAuth.UserId,
                     this
                 );
@@ -412,7 +446,7 @@ namespace SiteLink.API.Networking
 
                     ConnectingToServer = null;
 
-                    Connection?.Listener.SessionManager.FailPending(Connection?.PreAuth.UserId, this, "server offline");
+                    SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "server offline");
                     break;
 
                 case DisconnectReason.ConnectionRejected when disconnectInfo.AdditionalData.RawData != null:
@@ -436,7 +470,7 @@ namespace SiteLink.API.Networking
 
                             OnConnectionDelayed.Invoke(new ConnectionDelayedResponse(ConnectingToServer, offset));
 
-                            Connection?.Listener.SessionManager.FailPending(Connection?.PreAuth.UserId, this, "connection delayed");
+                            SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "connection delayed");
                             break;
 
                         case RejectionReason.ServerFull:
@@ -444,7 +478,7 @@ namespace SiteLink.API.Networking
 
                             ConnectingToServer = null;
 
-                            Connection?.Listener.SessionManager.FailPending(Connection?.PreAuth.UserId, this, "full");
+                            SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "full");
                             break;
 
                         case RejectionReason.Banned:
@@ -454,7 +488,7 @@ namespace SiteLink.API.Networking
 
                             OnBanned?.Invoke(new BannedResponse(ConnectingToServer, banReason, date));
 
-                            Connection?.Listener.SessionManager.FailPending(Connection?.PreAuth.UserId, this, "banned");
+                            SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "banned");
                             break;
 
                         case RejectionReason.Challenge:
@@ -475,6 +509,8 @@ namespace SiteLink.API.Networking
             byte[] bytes = reader.RawData;
             int position = reader.Position;
             int length = reader.AvailableBytes;
+
+            Stats.RecordBytesFromServer(length);
 
             if (!_serverToClient.TryRewrite(this, bytes, position, length, out var outBytes, out var outPos, out var outLen, out bool pooled))
             {
