@@ -1,40 +1,24 @@
-using InventorySystem.Items.Pickups;
-using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class Scp1509PickupComponent : BehaviourComponent
+public class Scp1509PickupComponent : CollisionDetectionPickupComponent
 {
-
-    private PickupSyncInfo _info;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
-
     public Scp1509PickupComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
+
     }
+
 }

@@ -1,27 +1,10 @@
-﻿using Mirror;
-using Org.BouncyCastle.Utilities;
-using PlayerRoles.FirstPersonControl;
-using RelativePositioning;
-using SiteLink.API.Core;
-using SiteLink.API.Metrics;
+﻿using SiteLink.API.Metrics;
 using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
-using UserSettings.ServerSpecific;
-using YamlDotNet.Core.Tokens;
 
 namespace SiteLink.API.Networking
 {
-    public enum SessionStatus
-    {
-        None,
-        Connecting,
-        Challenge,
-        PreAuthentication,
-        Connected,
-        Retrying,
-    }
-
     [ThreadAffined("SessionService")]
     public class Session : IDisposable
     {
@@ -259,8 +242,8 @@ namespace SiteLink.API.Networking
             Challenge = new ChallengeHandler(this);
 
             SiteLinkLogger.Info(servers.Length > 1
-                ? $"{Connection.Tag} Connecting to one of {servers.Length} servers..."
-                : $"{Connection.Tag} Connecting to server {servers[0].Tag}...");
+                ? $"{Connection.Tag} Connecting to one of (f=yellow){servers.Length}(f=white) servers..."
+                : $"{Connection.Tag} Connecting to server (f=yellow){servers[0].Name}(f=white)...");
 
             _serverToClient.Register(NetworkMessages.SeedMessage, static (id, r, original, session) =>
             {
@@ -387,7 +370,7 @@ namespace SiteLink.API.Networking
         /// <param name="reason">The reason for disconnection</param>
         public void Disconnect(string reason = null)
         {
-            if (Connection.Session == this)
+            if (Connection?.Session == this)
                 Connection?.Disconnect(reason);
 
             if (_netManager?.FirstPeer != null)
@@ -425,8 +408,8 @@ namespace SiteLink.API.Networking
 
             SiteLinkLogger.Info(
                 isSimulated
-                    ? $"{Connection.Tag} Connected to simulated server!"
-                    : $"{Connection.Tag} Connected to server!"
+                    ? $"{Connection.Tag} Connected to simulated server (f=yellow){Server.Name}(f=white)!"
+                    : $"{Connection.Tag} Connected to server (f=yellow){Server.Name}(f=white)!"
             );
 
             if (Connection.Session == null)
@@ -440,6 +423,8 @@ namespace SiteLink.API.Networking
 
                 Connection.AcceptRequest();
                 Connection.Session = this;
+
+                SiteLinkLogger.Info("Accept request");
                 return;
             }
 
@@ -457,12 +442,16 @@ namespace SiteLink.API.Networking
 
         private void OnDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
         {
-            SiteLinkLogger.Info("Disconnected " + disconnectInfo.Reason);
-
             switch (disconnectInfo.Reason)
             {
                 default:
-                    SiteLinkLogger.Info($"{Connection.Tag} Disconnect undefined {disconnectInfo.Reason}");
+                    SiteLinkLogger.Info($"{Connection?.Tag} Disconnect undefined {disconnectInfo.Reason}");
+                    break;
+
+                case DisconnectReason.Timeout:
+                    SiteLinkLogger.Info($"{Server.Name} Timeout!");
+
+                    Status = SessionStatus.Timeout;
                     break;
 
                 case DisconnectReason.ConnectionFailed when disconnectInfo.AdditionalData.RawData == null:

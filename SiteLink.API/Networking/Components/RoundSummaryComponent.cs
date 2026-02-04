@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class RoundSummaryComponent : BehaviourComponent
 {
-
     private int _extraTargets;
 
     private int _targetCount;
@@ -15,7 +14,7 @@ public class RoundSummaryComponent : BehaviourComponent
         get => _extraTargets;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _extraTargets = value;
         }
     }
@@ -25,19 +24,24 @@ public class RoundSummaryComponent : BehaviourComponent
         get => _targetCount;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _targetCount = value;
         }
     }
 
-    public RoundSummaryComponent(NetworkObject networkObject) : base(networkObject)
+    public RoundSummaryComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public RoundSummaryComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteInt(_extraTargets);
@@ -45,14 +49,18 @@ public class RoundSummaryComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteInt(_extraTargets);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteInt(_targetCount);
         }
     }
+
 }

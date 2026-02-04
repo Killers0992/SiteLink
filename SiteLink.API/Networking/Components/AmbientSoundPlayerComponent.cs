@@ -3,18 +3,26 @@ namespace SiteLink.API.Networking.Components;
 
 public class AmbientSoundPlayerComponent : BehaviourComponent
 {
-
-    public AmbientSoundPlayerComponent(NetworkObject networkObject) : base(networkObject)
+    public AmbientSoundPlayerComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public AmbientSoundPlayerComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             return;
         }
+
+        writer.WriteULong(SyncVarDirtyBits);
+
     }
+
 }

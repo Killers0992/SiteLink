@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class SpawnableCullingParentComponent : BehaviourComponent
 {
-
     private Vector3 _boundsPosition;
 
     private Vector3 _boundsSize;
@@ -15,7 +14,7 @@ public class SpawnableCullingParentComponent : BehaviourComponent
         get => _boundsPosition;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _boundsPosition = value;
         }
     }
@@ -25,19 +24,24 @@ public class SpawnableCullingParentComponent : BehaviourComponent
         get => _boundsSize;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _boundsSize = value;
         }
     }
 
-    public SpawnableCullingParentComponent(NetworkObject networkObject) : base(networkObject)
+    public SpawnableCullingParentComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public SpawnableCullingParentComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteVector3(_boundsPosition);
@@ -45,14 +49,18 @@ public class SpawnableCullingParentComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteVector3(_boundsPosition);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteVector3(_boundsSize);
         }
     }
+
 }

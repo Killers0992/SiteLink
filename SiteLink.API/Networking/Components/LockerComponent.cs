@@ -3,9 +3,8 @@ using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class LockerComponent : BehaviourComponent
+public class LockerComponent : SpawnableStructureComponent
 {
-
     private ushort _openedChambers;
 
     public ushort OpenedChambers
@@ -13,28 +12,33 @@ public class LockerComponent : BehaviourComponent
         get => _openedChambers;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _openedChambers = value;
         }
     }
 
-    public LockerComponent(NetworkObject networkObject) : base(networkObject)
+    public LockerComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
         //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteUShort(_openedChambers);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteUShort(_openedChambers);
         }
     }
+
 }

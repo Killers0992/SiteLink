@@ -12,11 +12,12 @@ public class NetworkObject : IDisposable
     public Quaternion Rotation { get; set; } = Quaternion.identity;
     public Vector3 Scale { get; set; } = Vector3.one;
 
+    public World World { get; private set; }
     public Session Owner { get; private set; }
 
-    public World World { get; private set; }
-
     public BehaviourComponent[] Behaviours { get; set; }
+
+    public List<Session> Observers = new List<Session>();
 
     public NetworkObject(World world, Session owner, uint networkId = 0)
     {
@@ -53,19 +54,25 @@ public class NetworkObject : IDisposable
         World = world;
     }
 
-    public void SendUpdate(Session session)
+    public void SendUpdate(Session client)
     {
+        if (!Observers.Contains(client))
+        {
+            SpawnWithPayload(client);
+            return;
+        }
+
         NetworkWriter wr2 = Serialize(false);
 
         if (wr2 == null)
             return;
 
-        session.Connection.AsServer.Send(w =>
-        {
-            w.WriteUShort(NetworkMessageId<EntityStateMessage>.Id);
-            w.WriteUInt(NetworkId);
-            w.WriteArraySegmentAndSize(wr2.ToArraySegment());
-        });
+        NetworkWriter wr = new NetworkWriter();
+        wr.WriteUShort(NetworkMessageId<EntityStateMessage>.Id);
+        wr.WriteUInt(NetworkId);
+        wr.WriteArraySegmentAndSize(wr2.ToArraySegment());
+
+        client.Connection.AsServer.Send(wr);
     }
 
     public void Deserialize(NetworkReader reader, bool intialState)
@@ -154,49 +161,54 @@ public class NetworkObject : IDisposable
         return bit;
     }
 
-    public void AssignOwner(Session session)
+    public void AssignOwner(Session owner)
     {
-        Owner = session;
+        Owner = owner;
     }
 
-    public void Destroy(Session session)
+    public void Destroy(Session client)
     {
-        session.Connection?.AsServer.Destroy(NetworkId);
+        client.Connection.AsServer.Destroy(NetworkId);
     }
 
     public void Destroy()
     {
         if (Owner != null)
-            Owner.Connection?.AsServer.Destroy(NetworkId);
+            Owner.Connection.AsServer.Destroy(NetworkId);
 
         Dispose();
     }
 
-    public void SpawnWithPayload(Session session)
+    public void SpawnWithPayload(Session client)
     {
         NetworkWriter wr2 = Serialize(true);
-
-        Spawn(session, wr2.ToArraySegment());
+        Spawn(client, wr2.ToArraySegment());
     }
 
-    public void Spawn(Session session, ArraySegment<byte> payload = default)
+    public void Spawn(Session client, ArraySegment<byte> payload = default)
     {
-        session.Connection.AsServer.Spawn(
+        client.Connection.AsServer.Spawn(
             NetworkId,
-            Owner == session,
-            Owner == session,
+            Owner == client,
+            Owner == client,
             SceneId,
             AssetId,
             Position,
             Rotation,
             Scale,
             payload);
+
+        Observers.Add(client);
     }
 
-    public virtual void OnReceiveCommand(byte componentIndex, ushort functionHash, ArraySegment<byte> payload = default)
+    public virtual bool OnReceiveCommand(byte componentIndex, ushort functionHash, NetworkReader reader)
     {
+        bool runCommand = true;
+
         if (Behaviours.Length > componentIndex && Behaviours[componentIndex] != null)
-            Behaviours[componentIndex].OnReceiveCommand(functionHash, payload);
+            runCommand = Behaviours[componentIndex].OnReceiveCommand(functionHash, reader);
+
+        return runCommand;
     }
 
     public void Dispose()
@@ -205,4 +217,3 @@ public class NetworkObject : IDisposable
         Owner = null;
     }
 }
-

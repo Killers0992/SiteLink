@@ -2,9 +2,14 @@
 
 namespace SiteLink.API.Networking.Common;
 
-public class SyncListObject<T> : SyncObject
+public class SyncListObject<T> : SyncedNetworkProperty
 {
     public uint Count = 0;
+
+    public SyncListObject(uint count = 0) : base()
+    {
+        Count = count;
+    }
 
     public override void OnSerializeAll(NetworkWriter writer)
     {

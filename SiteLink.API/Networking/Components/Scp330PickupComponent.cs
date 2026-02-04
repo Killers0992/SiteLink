@@ -1,60 +1,44 @@
-using InventorySystem.Items.Pickups;
 using Mirror;
 using InventorySystem.Items.Usables.Scp330;
-using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class Scp330PickupComponent : BehaviourComponent
+public class Scp330PickupComponent : CollisionDetectionPickupComponent
 {
-
-    private PickupSyncInfo _info;
-
     private CandyKindID _exposedCandy;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
 
     public CandyKindID ExposedCandy
     {
         get => _exposedCandy;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _exposedCandy = value;
         }
     }
 
     public Scp330PickupComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
             writer.Write(_exposedCandy);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.Write(_exposedCandy);
         }
     }
+
 }

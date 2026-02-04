@@ -6,7 +6,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class InventoryComponent : BehaviourComponent
 {
-
     private ItemIdentifier _curItem;
 
     private float _syncStaminaModifier;
@@ -20,7 +19,7 @@ public class InventoryComponent : BehaviourComponent
         get => _curItem;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _curItem = value;
         }
     }
@@ -30,7 +29,7 @@ public class InventoryComponent : BehaviourComponent
         get => _syncStaminaModifier;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _syncStaminaModifier = value;
         }
     }
@@ -40,7 +39,7 @@ public class InventoryComponent : BehaviourComponent
         get => _syncMovementLimiter;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _syncMovementLimiter = value;
         }
     }
@@ -50,19 +49,24 @@ public class InventoryComponent : BehaviourComponent
         get => _syncMovementMultiplier;
         set
         {
-            SetSyncVarDirtyBit(8);
+            SetSyncVarDirtyBit(8UL);
             _syncMovementMultiplier = value;
         }
     }
 
-    public InventoryComponent(NetworkObject networkObject) : base(networkObject)
+    public InventoryComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public InventoryComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.Write(_curItem);
@@ -72,24 +76,28 @@ public class InventoryComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.Write(_curItem);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteFloat(_syncStaminaModifier);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteFloat(_syncMovementLimiter);
         }
 
-        if ((SyncVarDirtyBits & 8U) != 0)
+        if ((SyncVarDirtyBits & 8UL) != 0UL)
         {
             writer.WriteFloat(_syncMovementMultiplier);
         }
     }
+
 }

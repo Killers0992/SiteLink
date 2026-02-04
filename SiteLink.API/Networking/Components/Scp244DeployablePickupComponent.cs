@@ -1,34 +1,20 @@
-using InventorySystem.Items.Pickups;
 using Mirror;
 using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class Scp244DeployablePickupComponent : BehaviourComponent
+public class Scp244DeployablePickupComponent : CollisionDetectionPickupComponent
 {
-
-    private PickupSyncInfo _info;
-
     private byte _syncSizePercent;
 
     private byte _syncState;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
 
     public byte SyncSizePercent
     {
         get => _syncSizePercent;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _syncSizePercent = value;
         }
     }
@@ -38,40 +24,39 @@ public class Scp244DeployablePickupComponent : BehaviourComponent
         get => _syncState;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _syncState = value;
         }
     }
 
     public Scp244DeployablePickupComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
             writer.WriteByte(_syncSizePercent);
             writer.WriteByte(_syncState);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteByte(_syncSizePercent);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteByte(_syncState);
         }
     }
+
 }

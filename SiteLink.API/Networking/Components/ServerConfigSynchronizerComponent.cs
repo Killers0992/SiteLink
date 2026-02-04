@@ -6,7 +6,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class ServerConfigSynchronizerComponent : BehaviourComponent
 {
-
     private byte _mainBoolsSync;
 
     private string _serverName;
@@ -22,7 +21,7 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
         get => _mainBoolsSync;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _mainBoolsSync = value;
         }
     }
@@ -32,7 +31,7 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
         get => _serverName;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _serverName = value;
         }
     }
@@ -42,7 +41,7 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
         get => _enableRemoteAdminPredefinedBanTemplates;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _enableRemoteAdminPredefinedBanTemplates = value;
         }
     }
@@ -52,7 +51,7 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
         get => _remoteAdminExternalPlayerLookupMode;
         set
         {
-            SetSyncVarDirtyBit(8);
+            SetSyncVarDirtyBit(8UL);
             _remoteAdminExternalPlayerLookupMode = value;
         }
     }
@@ -62,19 +61,24 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
         get => _remoteAdminExternalPlayerLookupURL;
         set
         {
-            SetSyncVarDirtyBit(16);
+            SetSyncVarDirtyBit(16UL);
             _remoteAdminExternalPlayerLookupURL = value;
         }
     }
 
-    public ServerConfigSynchronizerComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<sbyte>(), new SyncListObject<AmmoLimit>(), new SyncListObject<PredefinedBanTemplate>())
+    public ServerConfigSynchronizerComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public ServerConfigSynchronizerComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteByte(_mainBoolsSync);
@@ -85,29 +89,33 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteByte(_mainBoolsSync);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteString(_serverName);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteBool(_enableRemoteAdminPredefinedBanTemplates);
         }
 
-        if ((SyncVarDirtyBits & 8U) != 0)
+        if ((SyncVarDirtyBits & 8UL) != 0UL)
         {
             writer.WriteString(_remoteAdminExternalPlayerLookupMode);
         }
 
-        if ((SyncVarDirtyBits & 16U) != 0)
+        if ((SyncVarDirtyBits & 16UL) != 0UL)
         {
             writer.WriteString(_remoteAdminExternalPlayerLookupURL);
         }
     }
+
 }

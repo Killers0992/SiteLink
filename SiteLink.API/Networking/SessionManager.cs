@@ -218,10 +218,15 @@ namespace SiteLink.API.Networking
                 return false;
 
             s.AttachToConnection(connection);
+
+            connection.AcceptRequest();
             connection.Session = s;
 
             connection.AsServer.Scene("Facility");
-            connection.AsServer.Seed(s.MapSeed);
+
+            if (!s.Server.IsSimulated)
+                connection.AsServer.Seed(s.MapSeed);
+
             return true;
         }
 

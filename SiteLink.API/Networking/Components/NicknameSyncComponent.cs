@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class NicknameSyncComponent : BehaviourComponent
 {
-
     private float _viewRange;
 
     private string _customPlayerInfoString;
@@ -21,7 +20,7 @@ public class NicknameSyncComponent : BehaviourComponent
         get => _viewRange;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _viewRange = value;
         }
     }
@@ -31,7 +30,7 @@ public class NicknameSyncComponent : BehaviourComponent
         get => _customPlayerInfoString;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _customPlayerInfoString = value;
         }
     }
@@ -41,7 +40,7 @@ public class NicknameSyncComponent : BehaviourComponent
         get => _playerInfoToShow;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _playerInfoToShow = value;
         }
     }
@@ -51,7 +50,7 @@ public class NicknameSyncComponent : BehaviourComponent
         get => _myNickSync;
         set
         {
-            SetSyncVarDirtyBit(8);
+            SetSyncVarDirtyBit(8UL);
             _myNickSync = value;
         }
     }
@@ -61,19 +60,24 @@ public class NicknameSyncComponent : BehaviourComponent
         get => _displayName;
         set
         {
-            SetSyncVarDirtyBit(16);
+            SetSyncVarDirtyBit(16UL);
             _displayName = value;
         }
     }
 
-    public NicknameSyncComponent(NetworkObject networkObject) : base(networkObject)
+    public NicknameSyncComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public NicknameSyncComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteFloat(_viewRange);
@@ -84,29 +88,33 @@ public class NicknameSyncComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteFloat(_viewRange);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteString(_customPlayerInfoString);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.Write(_playerInfoToShow);
         }
 
-        if ((SyncVarDirtyBits & 8U) != 0)
+        if ((SyncVarDirtyBits & 8UL) != 0UL)
         {
             writer.WriteString(_myNickSync);
         }
 
-        if ((SyncVarDirtyBits & 16U) != 0)
+        if ((SyncVarDirtyBits & 16UL) != 0UL)
         {
             writer.WriteString(_displayName);
         }
     }
+
 }

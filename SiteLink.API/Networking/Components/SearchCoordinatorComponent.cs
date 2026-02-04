@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class SearchCoordinatorComponent : BehaviourComponent
 {
-
     private float _rayDistance;
 
     public float RayDistance
@@ -13,28 +12,37 @@ public class SearchCoordinatorComponent : BehaviourComponent
         get => _rayDistance;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _rayDistance = value;
         }
     }
 
-    public SearchCoordinatorComponent(NetworkObject networkObject) : base(networkObject)
+    public SearchCoordinatorComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public SearchCoordinatorComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteFloat(_rayDistance);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteFloat(_rayDistance);
         }
     }
+
 }

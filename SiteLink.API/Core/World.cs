@@ -160,12 +160,16 @@ public class World : IDisposable
             Position = position
         };
 
+        waypoint.WaypointToy.Position = position;
+        waypoint.WaypointToy.Scale = Vector3.one;
+
         waypoint.WaypointToy.BoundsSize = new Vector3(100f, 100f, 100f);
         waypoint.WaypointToy.WaypointId = GetFreeWaypointId();
 
         _waypointsLock.EnterWriteLock();
         try
         {
+            SiteLinkLogger.Info("added waypoint " + waypoint.WaypointToy.WaypointId);
             Waypoints[waypoint.WaypointToy.WaypointId] = waypoint;
         }
         finally
@@ -217,7 +221,7 @@ public class World : IDisposable
 
         SpawnObjectsForSession(session);
 
-        //EventManager.Client.InvokeLoadedWorld(new ClientLoadedWorldEvent(client, this));
+        EventManager.Client.InvokeLoadedWorld(new SessionLoadedWorldEvent(session, this));
 
         return result;
     }
@@ -265,7 +269,7 @@ public class World : IDisposable
             foreach (var obj in Objects)
             {
                 // Spawn objects for client.
-                //SiteLinkLogger.Info($"Spawn {obj.Value.GetType().Name} for {client.PreAuth.UserId}");
+                SiteLinkLogger.Info($"Spawn {obj.Value.GetType().Name} for {session.UserId}");
                 obj.Value.SpawnWithPayload(session);
             }
         }

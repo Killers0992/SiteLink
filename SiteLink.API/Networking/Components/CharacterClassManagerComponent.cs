@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class CharacterClassManagerComponent : BehaviourComponent
 {
-
     private string _pastebin;
 
     private ushort _maxPlayers;
@@ -17,7 +16,7 @@ public class CharacterClassManagerComponent : BehaviourComponent
         get => _pastebin;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _pastebin = value;
         }
     }
@@ -27,7 +26,7 @@ public class CharacterClassManagerComponent : BehaviourComponent
         get => _maxPlayers;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _maxPlayers = value;
         }
     }
@@ -37,19 +36,24 @@ public class CharacterClassManagerComponent : BehaviourComponent
         get => _roundStarted;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _roundStarted = value;
         }
     }
 
-    public CharacterClassManagerComponent(NetworkObject networkObject) : base(networkObject)
+    public CharacterClassManagerComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public CharacterClassManagerComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteString(_pastebin);
@@ -58,19 +62,23 @@ public class CharacterClassManagerComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteString(_pastebin);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteUShort(_maxPlayers);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteBool(_roundStarted);
         }
     }
+
 }

@@ -1,40 +1,24 @@
-using InventorySystem.Items.Pickups;
-using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class CollisionDetectionPickupComponent : BehaviourComponent
+public class CollisionDetectionPickupComponent : ItemPickupBaseComponent
 {
-
-    private PickupSyncInfo _info;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
-
-    public CollisionDetectionPickupComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
+    public CollisionDetectionPickupComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
         //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
+
     }
+
 }

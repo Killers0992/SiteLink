@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class ServerRolesComponent : BehaviourComponent
 {
-
     private string _myText;
 
     private string _myColor;
@@ -21,7 +20,7 @@ public class ServerRolesComponent : BehaviourComponent
         get => _myText;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _myText = value;
         }
     }
@@ -31,7 +30,7 @@ public class ServerRolesComponent : BehaviourComponent
         get => _myColor;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _myColor = value;
         }
     }
@@ -41,7 +40,7 @@ public class ServerRolesComponent : BehaviourComponent
         get => _globalBadge;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _globalBadge = value;
         }
     }
@@ -51,7 +50,7 @@ public class ServerRolesComponent : BehaviourComponent
         get => _globalBadgeSignature;
         set
         {
-            SetSyncVarDirtyBit(8);
+            SetSyncVarDirtyBit(8UL);
             _globalBadgeSignature = value;
         }
     }
@@ -61,19 +60,24 @@ public class ServerRolesComponent : BehaviourComponent
         get => _hideFromPlayerList;
         set
         {
-            SetSyncVarDirtyBit(16);
+            SetSyncVarDirtyBit(16UL);
             _hideFromPlayerList = value;
         }
     }
 
-    public ServerRolesComponent(NetworkObject networkObject) : base(networkObject)
+    public ServerRolesComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public ServerRolesComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteString(_myText);
@@ -84,29 +88,33 @@ public class ServerRolesComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteString(_myText);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteString(_myColor);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteString(_globalBadge);
         }
 
-        if ((SyncVarDirtyBits & 8U) != 0)
+        if ((SyncVarDirtyBits & 8UL) != 0UL)
         {
             writer.WriteString(_globalBadgeSignature);
         }
 
-        if ((SyncVarDirtyBits & 16U) != 0)
+        if ((SyncVarDirtyBits & 16UL) != 0UL)
         {
             writer.WriteBool(_hideFromPlayerList);
         }
     }
+
 }

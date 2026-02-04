@@ -1,77 +1,44 @@
-using InventorySystem.Items.Pickups;
 using Mirror;
 using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class Scp2176ProjectileComponent : BehaviourComponent
+public class Scp2176ProjectileComponent : EffectGrenadeComponent
 {
-
-    private PickupSyncInfo _info;
-
-    private double _syncTargetTime;
-
     private bool _playedDropSound;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
-
-    public double SyncTargetTime
-    {
-        get => _syncTargetTime;
-        set
-        {
-            SetSyncVarDirtyBit(2);
-            _syncTargetTime = value;
-        }
-    }
 
     public bool PlayedDropSound
     {
         get => _playedDropSound;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _playedDropSound = value;
         }
     }
 
     public Scp2176ProjectileComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
-            writer.WriteDouble(_syncTargetTime);
             writer.WriteBool(_playedDropSound);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
 
-        if ((SyncVarDirtyBits & 2U) != 0)
-        {
-            writer.WriteDouble(_syncTargetTime);
-        }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteBool(_playedDropSound);
         }
     }
+
 }

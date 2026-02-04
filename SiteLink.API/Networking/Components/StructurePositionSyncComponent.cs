@@ -6,7 +6,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class StructurePositionSyncComponent : BehaviourComponent
 {
-
     private sbyte _rotationY;
 
     private Vector3 _position;
@@ -16,7 +15,7 @@ public class StructurePositionSyncComponent : BehaviourComponent
         get => _rotationY;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _rotationY = value;
         }
     }
@@ -26,19 +25,24 @@ public class StructurePositionSyncComponent : BehaviourComponent
         get => _position;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _position = value;
         }
     }
 
-    public StructurePositionSyncComponent(NetworkObject networkObject) : base(networkObject)
+    public StructurePositionSyncComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public StructurePositionSyncComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteSByte(_rotationY);
@@ -46,14 +50,18 @@ public class StructurePositionSyncComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteSByte(_rotationY);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteVector3(_position);
         }
     }
+
 }

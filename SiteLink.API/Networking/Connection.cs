@@ -35,9 +35,7 @@ namespace SiteLink.API.Networking
 
                 string user = PreAuth.UserId;
 
-                string serverTag = (Session?.Server != null) ? $" {Session.Server.Tag}" : string.Empty;
-
-                return $"{listenerTag} [(f=green){user}(f=white)]{serverTag}";
+                return $"{listenerTag} [(f=green){user}(f=white)]";
             }
         }
 
@@ -132,7 +130,7 @@ namespace SiteLink.API.Networking
         /// <param name="name">The server name.</param>
         public void Connect(string name)
         {
-            ThreadOwner.Verify(this);
+            //ThreadOwner.Verify(this);
             ConnectInternal(name);
         }
 
@@ -179,7 +177,7 @@ namespace SiteLink.API.Networking
 
         public void Connect(Server server)
         {
-            ThreadOwner.Verify(this);
+            //ThreadOwner.Verify(this);
             ConnectInternal(server);
         }
 

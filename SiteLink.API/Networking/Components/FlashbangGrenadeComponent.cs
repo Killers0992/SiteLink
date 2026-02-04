@@ -1,59 +1,24 @@
-using InventorySystem.Items.Pickups;
-using Mirror;
-using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class FlashbangGrenadeComponent : BehaviourComponent
+public class FlashbangGrenadeComponent : EffectGrenadeComponent
 {
-
-    private PickupSyncInfo _info;
-
-    private double _syncTargetTime;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
-
-    public double SyncTargetTime
-    {
-        get => _syncTargetTime;
-        set
-        {
-            SetSyncVarDirtyBit(2);
-            _syncTargetTime = value;
-        }
-    }
-
     public FlashbangGrenadeComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
-            writer.WriteDouble(_syncTargetTime);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
 
-        if ((SyncVarDirtyBits & 2U) != 0)
-        {
-            writer.WriteDouble(_syncTargetTime);
-        }
     }
+
 }

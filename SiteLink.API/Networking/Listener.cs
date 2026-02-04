@@ -170,7 +170,9 @@ public class Listener : IDisposable
     {
         session.IsReady = true;
 
-        SiteLinkLogger.Info(session.Connection.Tag + $" Received ready message.");
+        session.Server?.InternalSessionReady(session);
+
+        SiteLinkLogger.Info(session.Connection?.Tag + $" Received ready message.");
 
         return InterceptResult.Pass();
     }
@@ -186,7 +188,7 @@ public class Listener : IDisposable
 
     static InterceptResult OnPosition(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
     {
-        if (session.Server?.IsSimulated ?? false)
+        if (!session.Server?.IsSimulated ?? true)
             return InterceptResult.Pass();
 
         byte code = r.ReadByte();
@@ -204,7 +206,6 @@ public class Listener : IDisposable
         if (_bitPosition)
         {
             byte waypointId = r.ReadByte();
-
 
             short PositionX, PositionY, PositionZ;
             if (waypointId > 0)
@@ -363,6 +364,9 @@ public class Listener : IDisposable
 
             foreach (var kvp in Connections)
             {
+                SiteLinkLogger.Info(kvp.Value.Peer.ConnectionState);
+                SiteLinkLogger.Info(kvp.Value.Peer.RoundTripTime);
+
                 if (kvp.Value.IsDisposed)
                 {
                     connectionsToRemove.Add(kvp.Value);
@@ -440,6 +444,14 @@ public class Listener : IDisposable
 
         if (ev.IsCancelled)
             return;
+
+        if (Connection.ConnectionByUserId.ContainsKey(preAuth.UserId))
+        {
+            SiteLinkLogger.Info($"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");
+
+            request.RejectWithReason(RequestWriter, RejectionReason.Error);
+            return;
+        }
 
         Connection connection = new Connection(this, request, preAuth);
 
