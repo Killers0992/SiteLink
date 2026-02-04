@@ -1,5 +1,7 @@
 ﻿using SiteLink.API.Metrics;
 using SiteLink.API.Threading;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace SiteLink.API.Networking
 {
@@ -46,9 +48,6 @@ namespace SiteLink.API.Networking
             get => _session;
             set
             {
-                if (value != null && _session == null)
-                    AcceptRequest();
-
                 _session = value;
             }
         }
@@ -68,7 +67,7 @@ namespace SiteLink.API.Networking
         public MirrorSender AsServer { get; } // sends to client
         public MirrorSender AsClient { get; } // sends to server
 
-        private double NowSeconds() => Session.SessionTime.TotalSeconds;
+        private double NowSeconds() => Session == null ? 0 : Session.SessionTime.TotalSeconds;
 
         public Connection(Listener listener, ConnectionRequest request, PreAuth preAuth)
         {
@@ -77,8 +76,10 @@ namespace SiteLink.API.Networking
 
             PreAuth = preAuth;
 
-            _ownerThreadId = Thread.CurrentThread.ManagedThreadId;
-            ThreadOwner.Register(this, listener.Name, _ownerThreadId);
+            // Use the Listener's thread ID to ensure all operations happen on the listener's thread
+            _ownerThreadId = listener.OwnerThreadId;
+
+            ThreadOwner.Register(this, listener.Name + ":" + preAuth.UserId, _ownerThreadId);
 
             ConnectionByUserId.Add(PreAuth.UserId, this);
 
@@ -154,7 +155,7 @@ namespace SiteLink.API.Networking
         /// <param name="servers">The server names.</param>
         public void Connect(string[] servers)
         {
-            ThreadOwner.Verify(this);
+            //ThreadOwner.Verify(this);
             ConnectInternal(servers);
         }
 
@@ -162,9 +163,18 @@ namespace SiteLink.API.Networking
         {
             SiteLinkLogger.Info($"{Tag} Connect to (f=yellow){string.Join("(f=white) -> (f=yellow)", servers)}(f=white)");
 
-            Server[] serverObjs = Server.List.Where(x => servers.Contains(x.Name.ToLower())).ToArray();
+            var serverNames = new HashSet<string>(servers.Select(s => s.ToLower()), StringComparer.OrdinalIgnoreCase);
+            var serverObjs = new List<Server>(servers.Length);
 
-            SessionManager.Singleton.CreateOrSwitchSession(this, serverObjs);
+            foreach (var server in Server.List)
+            {
+                if (serverNames.Contains(server.Name.ToLower()))
+                {
+                    serverObjs.Add(server);
+                }
+            }
+
+            SessionManager.Singleton.CreateOrSwitchSession(this, serverObjs.ToArray());
         }
 
         public void Connect(Server server)
@@ -225,10 +235,10 @@ namespace SiteLink.API.Networking
                     wr.WriteByte(1);
                     wr.WriteUShort((ushort)id);
 
-                    NetworkWriter wr2 = new NetworkWriter();
-                    wr2.WriteString(message);
+                    NetworkWriter messageWriter = new NetworkWriter();
+                    messageWriter.WriteString(message);
 
-                    wr.WriteArraySegmentAndSize(wr2.ToArraySegment());
+                    wr.WriteArraySegmentAndSize(messageWriter.ToArraySegment());
                 });
 
                 return;
@@ -238,12 +248,6 @@ namespace SiteLink.API.Networking
         }
 
         public void Dispose()
-        {
-            ThreadOwner.Verify(this);
-            DisposeInternal();
-        }
-
-        private void DisposeInternal()
         {
             if (IsSwitchingServers)
                 SessionManager.Singleton.DetachClient(PreAuth.UserId, "switching servers");

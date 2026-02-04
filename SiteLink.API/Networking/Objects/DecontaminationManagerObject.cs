@@ -3,7 +3,7 @@ namespace SiteLink.API.Networking.Objects;
 
 //
 // Name: DecontaminationManager
-// NetworkID: 440
+// NetworkID: 449
 // AssetID: 180257209
 // SceneID: 3656837584228160779
 // Path: GameManager/Announcement Sources/DecontaminationManager
@@ -13,7 +13,7 @@ public class DecontaminationManagerObject : NetworkObject
     public const uint ObjectAssetId = 180257209;
     public const ulong ObjectSceneId = 3656837584228160779;
 
-    public override uint NetworkId { get; set; } = 440;
+    public override uint NetworkId { get; set; } = 449;
     public override uint AssetId { get; } = ObjectAssetId;
     public override ulong SceneId { get; } = ObjectSceneId;
     public DecontaminationControllerComponent DecontaminationController { get; }

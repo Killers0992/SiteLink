@@ -3,11 +3,12 @@ using Org.BouncyCastle.Utilities;
 using PlayerRoles.FirstPersonControl;
 using RelativePositioning;
 using SiteLink.API.Core;
-using SiteLink.API.Threading;
 using SiteLink.API.Metrics;
+using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
 using UserSettings.ServerSpecific;
+using YamlDotNet.Core.Tokens;
 
 namespace SiteLink.API.Networking
 {
@@ -273,6 +274,24 @@ namespace SiteLink.API.Networking
             });
         }
 
+        public void SpawnPlayer()
+        {
+            if (PlayerObject != null)
+            {
+                SiteLinkLogger.Info($"Player object already exists for client ");
+                return;
+            }
+
+            PlayerObject = new PlayerObject(World);
+            PlayerObject.AssignOwner(this);
+
+            PlayerObject.Position = new Vector3(0f, -299f, 0f);
+
+            NetworkId = PlayerObject.NetworkId;
+
+            SiteLinkLogger.Info($"Created new player object for client.");
+        }
+
         public void AttachToConnection(Connection connection)
         {
             Connection = connection;
@@ -332,11 +351,13 @@ namespace SiteLink.API.Networking
 
                 FinalizeConnection(ConnectingToServer, isSimulated: true);
 
-                ConnectingToServer.InternalSessionConnected(this);
+                Connection?.AsServer.Scene("Facility");
                 return;
             }
 
             EnsureNet();
+
+            SiteLinkLogger.Info("Connect to " + ConnectingToServer.IpAddress + ":" + ConnectingToServer.Port);
 
             _netManager.Connect(ConnectingToServer.IpAddress, ConnectingToServer.Port, Connection.PreAuth.Create(ConnectingToServer.ForwardIpAddress, challengeId, challengeResponse));
         }
@@ -353,7 +374,7 @@ namespace SiteLink.API.Networking
 
         public void SendToServer(byte[] data, int offset, int length, DeliveryMethod method)
         {
-            if (_netManager == null)
+            if (_netManager?.FirstPeer == null)
                 return;
 
             Stats.RecordBytesToServer(length);
@@ -366,15 +387,11 @@ namespace SiteLink.API.Networking
         /// <param name="reason">The reason for disconnection</param>
         public void Disconnect(string reason = null)
         {
-            if (_netManager?.FirstPeer != null)
-            {
-                if (!string.IsNullOrEmpty(reason))
-                {
-                    //SiteLinkLogger.Info($"Disconnecting session: {reason}");
-                }
+            if (Connection.Session == this)
+                Connection?.Disconnect(reason);
 
+            if (_netManager?.FirstPeer != null)
                 _netManager.FirstPeer.Disconnect();
-            }
         }
 
         public void Update()
@@ -412,29 +429,36 @@ namespace SiteLink.API.Networking
                     : $"{Connection.Tag} Connected to server!"
             );
 
-            // If client already has an active session, this is a pending switch attempt
-            if (Connection.Session != null && Connection.Session != this)
+            if (Connection.Session == null)
             {
-                Connection.Session.Stats.RecordServerSwitch();
-
                 SessionManager.Singleton.PromotePendingToActive(
                     Connection.PreAuth.UserId,
                     this
                 );
 
-                // Tell proxy client to reconnect (switch servers)
-                Connection.AsServer.Reconnect();
+                AttachToConnection(Connection);
+
+                Connection.AcceptRequest();
+                Connection.Session = this;
                 return;
             }
 
-            // First / initial session
-            Connection.Session = this;
+            Connection.Session?.Stats.RecordServerSwitch();
+
+            SessionManager.Singleton.PromotePendingToActive(
+                Connection.PreAuth.UserId,
+                this
+            );
+
+            Connection.AsServer.Reconnect();
         }
 
         private void OnConnected(NetPeer peer) => FinalizeConnection(ConnectingToServer, isSimulated: false);
 
         private void OnDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
         {
+            SiteLinkLogger.Info("Disconnected " + disconnectInfo.Reason);
+
             switch (disconnectInfo.Reason)
             {
                 default:
@@ -445,8 +469,6 @@ namespace SiteLink.API.Networking
                     OnServerOffline.Invoke(new ServerOfflineResponse(ConnectingToServer, ConnectToServers.Count == 0));
 
                     ConnectingToServer = null;
-
-                    SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "server offline");
                     break;
 
                 case DisconnectReason.ConnectionRejected when disconnectInfo.AdditionalData.RawData != null:
@@ -468,17 +490,15 @@ namespace SiteLink.API.Networking
                             if (!disconnectInfo.AdditionalData.TryGetByte(out byte offset))
                                 break;
 
-                            OnConnectionDelayed.Invoke(new ConnectionDelayedResponse(ConnectingToServer, offset));
+                            SiteLinkLogger.Info("Delayed " + offset);
 
-                            SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "connection delayed");
+                            OnConnectionDelayed.Invoke(new ConnectionDelayedResponse(ConnectingToServer, offset));
                             break;
 
                         case RejectionReason.ServerFull:
                             OnServerFull?.Invoke(new ServerFullResponse(ConnectingToServer, ConnectToServers.Count == 0));
 
                             ConnectingToServer = null;
-
-                            SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "full");
                             break;
 
                         case RejectionReason.Banned:
@@ -487,11 +507,11 @@ namespace SiteLink.API.Networking
                             DateTime date = new DateTime(expireTime, DateTimeKind.Utc).ToLocalTime();
 
                             OnBanned?.Invoke(new BannedResponse(ConnectingToServer, banReason, date));
-
-                            SessionManager.Singleton.FailPending(Connection?.PreAuth.UserId, this, "banned");
                             break;
 
                         case RejectionReason.Challenge:
+                            SiteLinkLogger.Info("Challenge");
+
                             Challenge.ProcessChallenge(disconnectInfo.AdditionalData);
                             break;
 
@@ -524,7 +544,8 @@ namespace SiteLink.API.Networking
             if (Connection?.Session == this)
                 Connection.SendToClient(outBytes, outPos, outLen, deliveryMethod);
 
-            if (!ReferenceEquals(outBytes, bytes))
+            // Return pooled array to pool
+            if (pooled && !ReferenceEquals(outBytes, bytes))
                 ArrayPool<byte>.Shared.Return(outBytes);
         }
         

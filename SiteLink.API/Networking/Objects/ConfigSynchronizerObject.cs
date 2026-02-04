@@ -3,7 +3,7 @@ namespace SiteLink.API.Networking.Objects;
 
 //
 // Name: Config Synchronizer
-// NetworkID: 441
+// NetworkID: 450
 // AssetID: 180257209
 // SceneID: 3656837585730004444
 // Path: GameManager/Config Synchronizer
@@ -13,7 +13,7 @@ public class ConfigSynchronizerObject : NetworkObject
     public const uint ObjectAssetId = 180257209;
     public const ulong ObjectSceneId = 3656837585730004444;
 
-    public override uint NetworkId { get; set; } = 441;
+    public override uint NetworkId { get; set; } = 450;
     public override uint AssetId { get; } = ObjectAssetId;
     public override ulong SceneId { get; } = ObjectSceneId;
     public ServerConfigSynchronizerComponent ServerConfigSynchronizer { get; }

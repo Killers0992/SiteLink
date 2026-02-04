@@ -25,6 +25,7 @@ public class ChallengeHandler
             case ChallengeType.Reply:
                 if (reader.TryGetBytesWithLength(out ClientChallengeResponse))
                 {
+                    SiteLinkLogger.Info("Reconnect back");
                     Session.Connect(ClientChallengeId, ClientChallengeResponse);
                 }
                 break;

@@ -22,7 +22,19 @@ public class Listener : IDisposable
 
     public static CancellationToken Token;
 
-    public static List<Listener> List => ListenersByName.Values.ToList();
+    public static List<Listener> List
+    {
+        get
+        {
+            int currentVersion = ListenersByName.Count;
+            if (_cachedListenerList == null || _listenerListVersion != currentVersion)
+            {
+                _cachedListenerList = ListenersByName.Values.ToList();
+                _listenerListVersion = currentVersion;
+            }
+            return _cachedListenerList;
+        }
+    }
     public static ConcurrentDictionary<string, Listener> ListenersByName { get; } = new ConcurrentDictionary<string, Listener>();
 
     public static bool TryGet(string name, out Listener listener) => ListenersByName.TryGetValue(name, out listener);
@@ -32,15 +44,20 @@ public class Listener : IDisposable
     private string _version;
     private Version _parsedGameVersion;
 
-    private HttpClient _httpClient;
+    private SiteLinkApiClient _apiClient;
     private NetManager _manager;
     private EventBasedNetListener _listener;
     private int _index = -1;
 
-    private Queue<Connection> _connectionsToRemove = new Queue<Connection>();
+    private readonly ConcurrentQueue<Connection> _connectionsToRemove = new();
+    private readonly Timer _connectionCleanupTimer;
+    private readonly ArrayPool<byte> _byteArrayPool = ArrayPool<byte>.Shared;
 
     private int _threadId;
     private readonly ConcurrentQueue<Action> _workQueue = new();
+
+    private static List<Listener> _cachedListenerList;
+    private static int _listenerListVersion = 0;
 
     public string Name { get; }
 
@@ -87,21 +104,10 @@ public class Listener : IDisposable
 
     public string Tag => $"[(f=cyan){Name}(f=white)]";
 
-    public HttpClient Http
-    {
-        get
-        {
-            if (_httpClient == null)
-            {
-                _httpClient = new HttpClient();
-                _httpClient.DefaultRequestHeaders.Add("User-Agent", "SCP SL");
-                _httpClient.DefaultRequestHeaders.Add("Game-Version", GameVersion.ToString(3));
-            }
-
-            return _httpClient;
-        }
-    }
-
+    /// <summary>
+    /// Gets the thread ID that owns this listener.
+    /// </summary>
+    public int OwnerThreadId => _threadId;
 
     public bool ForceServerListUpdate;
 
@@ -138,86 +144,101 @@ public class Listener : IDisposable
             return;
         }
 
+        // Initialize periodic connection cleanup timer (every 30 seconds)
+        _connectionCleanupTimer = new Timer(CleanupStaleConnections, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+
         Task.Run(() => RunEventPolling(Token), Token);
 
         SiteLinkLogger.Info($"{Tag} Listening for clients on (f=green){ListenAddress}:{ListenPort}(f=white), allow clients with game version (f=green){Settings.GameVersion.ParseVersion()}(f=white)");
 
         EventManager.Listener.InvokeListenerRegistered(new ListenerRegisteredEvent(this));
 
-        _clientToServer.Register(NetworkMessages.ReadyMessage, static (id, r, original, session) =>
-        {
-            session.IsReady = true;
+        _clientToServer.Register(NetworkMessages.AddPlayerMessage, OnAddPlayer);
+        _clientToServer.Register(NetworkMessages.ReadyMessage, OnReady);
+        _clientToServer.Register(NetworkMessages.SSSClientResponse, OnSSSClientResponse);
+        _clientToServer.Register(NetworkMessages.FpcFromClientMessage, OnPosition);
+    }
 
-            SiteLinkLogger.Info(session.Connection.Tag + $" Received ready message.");
+    static InterceptResult OnAddPlayer(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
+    {
+        session.Server?.InternalSessionAddPlayer(session);
 
+        return InterceptResult.Pass();
+    }
+
+    static InterceptResult OnReady(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
+    {
+        session.IsReady = true;
+
+        SiteLinkLogger.Info(session.Connection.Tag + $" Received ready message.");
+
+        return InterceptResult.Pass();
+    }
+
+    static InterceptResult OnSSSClientResponse(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
+    {
+        SSSClientResponse response = new SSSClientResponse(r);
+
+        session.Server?.OnSessionSSSReponse(session, response.Id);
+
+        return InterceptResult.Pass();
+    }
+
+    static InterceptResult OnPosition(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
+    {
+        if (session.Server?.IsSimulated ?? false)
             return InterceptResult.Pass();
-        });
 
-        _clientToServer.Register(NetworkMessages.SSSClientResponse, static (id, r, original, session) =>
+        byte code = r.ReadByte();
+
+        bool _bitMouseLook = false;
+        bool _bitPosition = false;
+        bool _bitCustom = false;
+
+        ushort _rotH, _rotV;
+
+        global::Misc.ByteToBools(code, out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
+
+        PlayerMovementState _state = (PlayerMovementState)global::Misc.BoolsToByte(b1, b2, b3, b4, b5);
+
+        if (_bitPosition)
         {
-            SSSClientResponse response = new SSSClientResponse(r);
+            byte waypointId = r.ReadByte();
 
-            session.Server?.OnSessionSSSReponse(session, response.Id);
 
-            return InterceptResult.Pass();
-        });
-
-        _clientToServer.Register(NetworkMessages.FpcFromClientMessage, static (id, r, original, session) =>
-        {
-            if (session.Server?.IsSimulated ?? false)
-                return InterceptResult.Pass();
-
-            byte code = r.ReadByte();
-
-            bool _bitMouseLook = false;
-            bool _bitPosition = false;
-            bool _bitCustom = false;
-
-            ushort _rotH, _rotV;
-
-            global::Misc.ByteToBools(code, out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
-
-            PlayerMovementState _state = (PlayerMovementState)global::Misc.BoolsToByte(b1, b2, b3, b4, b5);
-
-            if (_bitPosition)
+            short PositionX, PositionY, PositionZ;
+            if (waypointId > 0)
             {
-                byte waypointId = r.ReadByte();
+                PositionX = r.ReadShort();
+                PositionY = r.ReadShort();
+                PositionZ = r.ReadShort();
 
-
-                short PositionX, PositionY, PositionZ;
-                if (waypointId > 0)
-                {
-                    PositionX = r.ReadShort();
-                    PositionY = r.ReadShort();
-                    PositionZ = r.ReadShort();
-
-                    session.WaypointId = waypointId;
-                    session.RelativePosition = new Vector3(PositionX * InverseAccuracy, PositionY * InverseAccuracy, PositionZ * InverseAccuracy);
-                }
-                else
-                {
-                    PositionX = 0;
-                    PositionY = 0;
-                    PositionZ = 0;
-                }
-            }
-
-            if (_bitMouseLook)
-            {
-                _rotH = r.ReadUShort();
-                _rotV = r.ReadUShort();
+                session.WaypointId = waypointId;
+                session.RelativePosition = new Vector3(PositionX * InverseAccuracy, PositionY * InverseAccuracy, PositionZ * InverseAccuracy);
             }
             else
             {
-                _rotH = 0;
-                _rotV = 0;
+                PositionX = 0;
+                PositionY = 0;
+                PositionZ = 0;
             }
+        }
 
-            session.HorizontalRotation = Mathf.Lerp(0, 360, _rotH / (float)ushort.MaxValue);
-            session.VerticalRotation = Mathf.Lerp(-88f, 88f, _rotV / (float)ushort.MaxValue);
+        if (_bitMouseLook)
+        {
+            _rotH = r.ReadUShort();
+            _rotV = r.ReadUShort();
+        }
+        else
+        {
+            _rotH = 0;
+            _rotV = 0;
+        }
 
-            return InterceptResult.Pass();
-        });
+        session.HorizontalRotation = Mathf.Lerp(0, 360, _rotH / (float)ushort.MaxValue);
+        session.VerticalRotation = Mathf.Lerp(-88f, 88f, _rotV / (float)ushort.MaxValue);
+
+        return InterceptResult.Pass();
     }
 
     public async Task Initialize()
@@ -236,14 +257,12 @@ public class Listener : IDisposable
     {
         try
         {
-            using (var response = await Http.GetAsync("https://api.scpslgame.com/ip.php"))
-            {
-                string str = await response.Content.ReadAsStringAsync();
+            using var client = new SiteLinkApiClient("SCP SL", GameVersion.ToString(3));
+            string str = await client.GetPublicIpAddressAsync();
 
-                str = (str.EndsWith(".") ? str.Remove(str.Length - 1) : str);
+            str = (str.EndsWith(".") ? str.Remove(str.Length - 1) : str);
 
-                return str;
-            }
+            return str;
         }
         catch (Exception ex)
         {
@@ -329,9 +348,40 @@ public class Listener : IDisposable
 
     void RemoveConnections()
     {
-        while (_connectionsToRemove.Count > 0)
+        while (_connectionsToRemove.TryDequeue(out Connection connection))
         {
-            PendingConnections.Remove(_connectionsToRemove.Dequeue());
+            PendingConnections.Remove(connection);
+        }
+    }
+
+    void CleanupStaleConnections(object state)
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            var connectionsToRemove = new List<Connection>();
+
+            foreach (var kvp in Connections)
+            {
+                if (kvp.Value.IsDisposed)
+                {
+                    connectionsToRemove.Add(kvp.Value);
+                }
+            }
+
+            foreach (var connection in connectionsToRemove)
+            {
+                Connections.TryRemove(connection.Peer?.Id ?? -1, out _);
+            }
+
+            if (connectionsToRemove.Count > 0)
+            {
+                SiteLinkLogger.Debug($"{Tag} Cleaned up {connectionsToRemove.Count} disposed connections.");
+            }
+        }
+        catch (Exception ex)
+        {
+            SiteLinkLogger.Error($"Error during connection cleanup: {ex}", Name);
         }
     }
 
@@ -429,8 +479,8 @@ public class Listener : IDisposable
 
         connection.Session.SendToServer(outBytes, outPos, outLen, deliveryMethod);
 
-        if (!ReferenceEquals(outBytes, bytes))
-            ArrayPool<byte>.Shared.Return(outBytes);
+        if (pooled && !ReferenceEquals(outBytes, bytes))
+            _byteArrayPool.Return(outBytes);
     }
 
     void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
@@ -457,13 +507,25 @@ public class Listener : IDisposable
     {
         EventManager.Listener.InvokeListenerUnregistered(new ListenerUnregisteredEvent(this));
 
-        _manager.Stop();
+        if (_listener != null)
+        {
+            _listener.ConnectionRequestEvent -= OnConnectionRequest;
+            _listener.NetworkReceiveEvent -= OnNetworkReceive;
+            _listener.PeerDisconnectedEvent -= OnPeerDisconnected;
+        }
+
+        _connectionCleanupTimer?.Dispose();
+
+        _apiClient?.Dispose();
+
+        _manager?.Stop();
         _manager = null;
 
         _listener = null;
 
         ListenersByName.TryRemove(Name, out _);
 
-        Console.WriteLine("Connections after dispose: " + Connections.Count);
+        _cachedListenerList = null;
+        _listenerListVersion = 0;
     }
 }

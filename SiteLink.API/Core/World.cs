@@ -1,6 +1,7 @@
 ﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Networking.Common;
+using System.Threading;
 using System.Linq;
 
 namespace SiteLink.API.Core;
@@ -51,8 +52,9 @@ public class World : IDisposable
 
     public bool DestroyOnEmpty { get; set; }
 
-    private readonly ReaderWriterLockSlim _lock = new();
-
+    private readonly ReaderWriterLockSlim _objectsLock = new();
+    private readonly ReaderWriterLockSlim _waypointsLock = new();
+    private readonly ReaderWriterLockSlim _sessionsLock = new();
     /// <summary>
     /// Thread-safe dictionary of objects in the world.
     /// </summary>
@@ -130,7 +132,7 @@ public class World : IDisposable
     /// </summary>
     public byte GetFreeWaypointId()
     {
-        _lock.EnterReadLock();
+        _waypointsLock.EnterReadLock();
         try
         {
             for (byte x = 1; x < byte.MaxValue; x++)
@@ -143,7 +145,7 @@ public class World : IDisposable
         }
         finally
         {
-            _lock.ExitReadLock();
+            _waypointsLock.ExitReadLock();
         }
         return 0;
     }
@@ -161,14 +163,14 @@ public class World : IDisposable
         waypoint.WaypointToy.BoundsSize = new Vector3(100f, 100f, 100f);
         waypoint.WaypointToy.WaypointId = GetFreeWaypointId();
 
-        _lock.EnterWriteLock();
+        _waypointsLock.EnterWriteLock();
         try
         {
             Waypoints[waypoint.WaypointToy.WaypointId] = waypoint;
         }
         finally
         {
-            _lock.ExitWriteLock();
+            _waypointsLock.ExitWriteLock();
         }
     }
 
@@ -193,7 +195,7 @@ public class World : IDisposable
     public bool Load(Session session)
     {
         bool result;
-        _lock.EnterWriteLock();
+        _sessionsLock.EnterWriteLock();
         try
         {
             if (_sessions.Contains(session))
@@ -202,7 +204,7 @@ public class World : IDisposable
             OnLoad(session);
 
             _sessions.Add(session);
-            _clientsVersion++;
+            Interlocked.Increment(ref _clientsVersion);
 
             SiteLinkLogger.Info($"{session.Connection.Tag} Loaded world (f=green){this}(f=white)");
 
@@ -210,9 +212,9 @@ public class World : IDisposable
         }
         finally
         {
-            _lock.ExitWriteLock();
+            _sessionsLock.ExitWriteLock();
         }
-        
+
         SpawnObjectsForSession(session);
 
         //EventManager.Client.InvokeLoadedWorld(new ClientLoadedWorldEvent(client, this));
@@ -227,7 +229,7 @@ public class World : IDisposable
     {
         DestroyObjectsForSession(session, targetWorld);
 
-        _lock.EnterWriteLock();
+        _sessionsLock.EnterWriteLock();
         try
         {
             if (!_sessions.Contains(session))
@@ -235,13 +237,13 @@ public class World : IDisposable
 
             OnUnload(session);
             _sessions.Remove(session);
-            _clientsVersion--;
+            Interlocked.Decrement(ref _clientsVersion);
 
             SiteLinkLogger.Info($"{session.Connection.Tag} Unloaded world (f=green){this}(f=white)");
         }
         finally
         {
-            _lock.ExitWriteLock();
+            _sessionsLock.ExitWriteLock();
         }
 
         if (GetClientsSnapshot().Count == 0 && DestroyOnEmpty)
@@ -257,7 +259,7 @@ public class World : IDisposable
     /// </summary>
     public void SpawnObjectsForSession(Session session)
     {
-        _lock.EnterReadLock();
+        _objectsLock.EnterReadLock();
         try
         {
             foreach (var obj in Objects)
@@ -269,7 +271,7 @@ public class World : IDisposable
         }
         finally
         {
-            _lock.ExitReadLock();
+            _objectsLock.ExitReadLock();
         }
 
         // Call outside the lock to avoid recursion
@@ -278,7 +280,7 @@ public class World : IDisposable
 
     public void DestroyObjectsForSession(Session session, World targetWorld)
     {
-        _lock.EnterReadLock();
+        _objectsLock.EnterReadLock();
         try
         {
             foreach (var obj in Objects)
@@ -296,7 +298,7 @@ public class World : IDisposable
         }
         finally
         {
-            _lock.ExitReadLock();
+            _objectsLock.ExitReadLock();
         }
     }
 
@@ -306,21 +308,20 @@ public class World : IDisposable
     public IReadOnlyList<Session> GetClientsSnapshot()
     {
         var cache = _clientsSnapshotCache.Value;
-        int currentVersion;
+        int currentVersion = Volatile.Read(ref _clientsVersion);
         List<Session> snapshot = null;
 
-        _lock.EnterReadLock();
+        _sessionsLock.EnterReadLock();
         try
         {
-            currentVersion = _clientsVersion;
             if (cache.version == currentVersion && cache.snapshot != null)
                 return cache.snapshot;
 
-            snapshot = [.. _sessions];
+            snapshot = new List<Session>(_sessions);
         }
         finally
         {
-            _lock.ExitReadLock();
+            _sessionsLock.ExitReadLock();
         }
 
         _clientsSnapshotCache.Value = (currentVersion, snapshot);
@@ -365,7 +366,9 @@ public class World : IDisposable
             WorldsLock.ExitWriteLock();
         }
 
-        _lock.Dispose();
+        _objectsLock.Dispose();
+        _waypointsLock.Dispose();
+        _sessionsLock.Dispose();
         _cts.Dispose();
 
         _clientsSnapshotCache.Dispose();

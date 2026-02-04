@@ -1,4 +1,6 @@
-﻿namespace SiteLink.API.Networking
+﻿using SiteLink.API.Threading;
+
+namespace SiteLink.API.Networking
 {
     public class SessionManager
     {
@@ -59,6 +61,7 @@
                         if (detachedAt.HasValue)
                         {
                             var offline = (now - detachedAt.Value).TotalSeconds;
+                            
                             SiteLinkLogger.Info($"Session re-established for user (f=yellow){userId}(f=white) (offline (f=green){offline:0.0}s(f=white))).", "Session");
                         }
                         else
@@ -127,6 +130,14 @@
 
             SessionSlot slot = Slots.GetOrAdd(userId, _ => new SessionSlot());
 
+            if (slot.Active == null && slot.Pending == null)
+            {
+                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId);
+                WireSessionCallbacks(slot.Pending, connection, false);
+
+                return slot.Pending;
+            }
+
             // If there is an active connected session, create a pending one
             if (slot.Active != null && slot.Active.Status == SessionStatus.Connected)
             {
@@ -168,7 +179,8 @@
 
             Session oldActive = slot.Active;
 
-            oldActive.Connection.IsSwitchingServers = true;
+            if (oldActive != null)
+                oldActive.Connection.IsSwitchingServers = true;
 
             slot.Active = pending;
             slot.Pending = null;
@@ -184,10 +196,11 @@
             if (!Slots.TryGetValue(userId, out SessionSlot slot))
                 return;
 
+
             if (slot.Pending != pending)
                 return;
 
-            SiteLinkLogger.Info($"{pending.Connection.Tag} Server (f=yellow){pending.ConnectingToServer.Name}(f=white) is (f=green){reason}");
+            SiteLinkLogger.Info($"{pending.Connection.Tag} Server (f=yellow){pending.ConnectingToServer.Name}(f=white) is (f=green){reason}(f=white)");
             slot.Pending = null;
 
             pending.Disconnect(reason);
@@ -250,7 +263,7 @@
                 if (isPending)
                 {
                     connection.AsServer.Hint($"Server <color=orange>{resp.Server.Name}</color> is offline!", 3f);
-                    FailPending(connection.PreAuth.UserId, session, $"Server {resp.Server.Name} is offline");
+                    FailPending(connection.PreAuth.UserId, session, $"offline");
                     return;
                 }
 
@@ -299,8 +312,6 @@
             }
 
             Slots.TryRemove(userId, out _);
-
-            SiteLinkLogger.Info($"Destroyed session for {userId}: {reason}", "Session");
         }
     }
 }

@@ -53,10 +53,9 @@ public class Server
         }
         else
         {
-            var pair = RegisteredServers.FirstOrDefault();
-
-            if (pair.Value != null)
-                return pair.Value;
+            using var enumerator = RegisteredServers.GetEnumerator();
+            if (enumerator.MoveNext())
+                return enumerator.Current.Value;
         }
 
         return null;
@@ -148,6 +147,8 @@ public class Server
         return false;
     }
 
+    internal void InternalSessionAddPlayer(Session session) => OnSessionAddPlayer(session);
+
     internal void InternalSessionReady(Session session) => OnSessionReady(session);
 
     public virtual bool OnSessionConnecting(Session session) => false;
@@ -159,6 +160,8 @@ public class Server
     public virtual void OnSessionSSSReponse(Session session, int id) { }
 
     public virtual void OnSessionReady(Session session) { }
+
+    public virtual void OnSessionAddPlayer(Session session) { }
 
     public virtual void OnUpdate() { }
 

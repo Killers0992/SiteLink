@@ -28,6 +28,8 @@ public static class Scheduler
     /// <param name="queueCallback">Callback to invoke when work is queued.</param>
     public static void RegisterThread(int threadId, string threadName, Action<Action> queueCallback)
     {
+        SiteLinkLogger.Info("Registering thread '" + threadName + "' with ID " + threadId, "Scheduler");
+
         _threadQueues[threadId] = new ThreadWorkQueue(threadName, queueCallback);
         _threadNameToId[threadName] = threadId;
     }

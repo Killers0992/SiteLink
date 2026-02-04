@@ -3,7 +3,7 @@ namespace SiteLink.API.Networking.Objects;
 
 //
 // Name: Summary
-// NetworkID: 438
+// NetworkID: 447
 // AssetID: 2276867293
 // SceneID: 3656837585203691429
 // Path: Player Canvas/Summary
@@ -13,7 +13,7 @@ public class SummaryObject : NetworkObject
     public const uint ObjectAssetId = 2276867293;
     public const ulong ObjectSceneId = 3656837585203691429;
 
-    public override uint NetworkId { get; set; } = 438;
+    public override uint NetworkId { get; set; } = 447;
     public override uint AssetId { get; } = ObjectAssetId;
     public override ulong SceneId { get; } = ObjectSceneId;
     public RoundSummaryComponent RoundSummary { get; }

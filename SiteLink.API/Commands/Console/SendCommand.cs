@@ -34,7 +34,10 @@ public class SendCommand
                     if (client.Session.Server == server)
                         continue;
 
-                    client.Connect(server);
+                    client.Execute(() =>
+                    {
+                        client.Connect(server);
+                    });
                 }
 
                 SiteLinkLogger.Info($"Sent (f=green){sent}(f=white) clients to server (f=green){server.Name}(f=white)", "send");
@@ -46,7 +49,10 @@ public class SendCommand
                     break;
                 }
 
-                targetPlayer.Connect(server);
+                targetPlayer.Execute(() =>
+                {
+                    targetPlayer.Connect(server);
+                });
                 break;
             case true when Server.TryGetByName(args[0], out Server serverFrom) && server != null:
                 if (server == serverFrom)
@@ -58,7 +64,10 @@ public class SendCommand
 
                 foreach (Session session in serverFrom.GetSessionsSnapshot())
                 {
-                    session?.Connection.Connect(server);
+                    session?.Connection.Execute(() =>
+                    {
+                        session?.Connection.Connect(server);
+                    });
                 }
 
                 SiteLinkLogger.Info($"Sent (f=green){sentPopulation}(f=white) clients from {serverFrom.Name} to clients (f=green){server.Name}(f=white)", "send");
