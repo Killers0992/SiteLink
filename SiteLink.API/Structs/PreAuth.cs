@@ -198,13 +198,6 @@ public struct PreAuth
             return false;
         }
 
-        if (!Enum.IsDefined(typeof(CentralAuthPreauthFlags), rawCentralFlags))
-        {
-            rejectForce = true;
-            response = DisconnectType.CentralFlagsOutOfRange;
-            return false;
-        }
-
         CentralAuthPreauthFlags centralFlags = (CentralAuthPreauthFlags) rawCentralFlags;
 
         if (!reader.TryGetString(out string region))
