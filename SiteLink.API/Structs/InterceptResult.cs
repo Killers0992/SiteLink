@@ -1,15 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace SiteLink.API.Misc
+﻿namespace SiteLink.API.Structs
 {
     public readonly struct InterceptResult
     {
         public InterceptDecision Decision { get; }
-        public ArraySegment<byte> Replacement { get; } // only for Replace / Defer(with new)
+        public ArraySegment<byte> Replacement { get; }
 
         private InterceptResult(InterceptDecision d, ArraySegment<byte> r)
         { Decision = d; Replacement = r; }

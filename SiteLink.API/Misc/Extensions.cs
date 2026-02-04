@@ -1,4 +1,5 @@
-﻿using SiteLink.API.Events;
+﻿using Org.BouncyCastle.Asn1.Ocsp;
+using SiteLink.API.Events;
 using System.Buffers;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -12,6 +13,16 @@ public static class Extensions
     private static string _parsedVersion;
 
     public const char ESC = (char)27;
+
+    public static void RejectWithReason(
+        this ConnectionRequest request,
+        NetDataWriter writer,
+        RejectionReason reason)
+    {
+        writer.Reset();
+        writer.Put((byte)reason);
+        request.RejectForce(writer);
+    }
 
     public static string ParseVersion(this string version)
     {

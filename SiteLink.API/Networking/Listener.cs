@@ -1,10 +1,11 @@
 ﻿using Mirror;
+using Org.BouncyCastle.Asn1.Ocsp;
 using PlayerRoles.FirstPersonControl;
 using RelativePositioning;
 using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
-using SiteLink.API.Threading;
 using SiteLink.API.Metrics;
+using SiteLink.API.Threading;
 using System.Buffers;
 using UserSettings.ServerSpecific;
 
@@ -107,6 +108,8 @@ public class Listener : IDisposable
     public bool ServerListUpdate;
 
     public int ServerListCycle;
+
+    readonly NetDataWriter RequestWriter = new NetDataWriter();
 
     public Listener(string name)
     {
@@ -332,6 +335,7 @@ public class Listener : IDisposable
         }
     }
 
+
     void OnConnectionRequest(ConnectionRequest request)
     {
         string connectionIpAddress = $"{request.RemoteEndPoint.Address}";
@@ -344,15 +348,38 @@ public class Listener : IDisposable
         {
             switch (response)
             {
-                // Client connecting to this listener does have wrong game version, reject with VersionMismatch.
+                case DisconnectType.InvalidClientType:
+                case DisconnectType.ClientTypeOutOfRange:
+                    request.RejectWithReason(RequestWriter, RejectionReason.InvalidToken);
+                    break;
+
+                case DisconnectType.ForbiddenClientType:
+                    request.RejectWithReason(RequestWriter, RejectionReason.VerificationRejected);
+                    break;
+
+                case DisconnectType.InvalidMajorVersion:
+                case DisconnectType.InvalidMinorVersion:
+                case DisconnectType.InvalidRevisionVersion:
+                case DisconnectType.InvalidBackwardCompatibility:
+                case DisconnectType.InvalidBackwardRevision:
                 case DisconnectType.VersionNotCompatible:
-                    NetDataWriter writer = new NetDataWriter();
-                    writer.Put((byte)RejectionReason.VersionMismatch);
-                    request.RejectForce(writer);
+                    request.RejectWithReason(RequestWriter, RejectionReason.VersionMismatch);
+                    break;
+
+                case DisconnectType.InvalidChallengeId:
+                    request.RejectWithReason(RequestWriter, RejectionReason.InvalidChallenge);
+                    break;
+
+                case DisconnectType.InvalidChallengeResponse:
+                    request.RejectWithReason(RequestWriter, RejectionReason.InvalidChallengeKey);
+                    break;
+
+                case DisconnectType.PreAuthExpired:
+                    request.RejectWithReason(RequestWriter, RejectionReason.ExpiredAuth);
                     break;
 
                 default:
-                    request.RejectForce();
+                    request.RejectWithReason(RequestWriter, RejectionReason.Error);
                     break;
             }
             return;
@@ -382,7 +409,9 @@ public class Listener : IDisposable
             return;
 
         int length = reader.AvailableBytes;
+
         connection.Stats.RecordBytesReceived(length);
+
         Stats?.RecordBytesReceived(length);
         Stats?.RecordPacketsReceived(1);
 
