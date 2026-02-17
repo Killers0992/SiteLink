@@ -23,7 +23,5 @@ public class PlayerEffectsControllerComponent : BehaviourComponent
         }
 
         writer.WriteULong(SyncVarDirtyBits);
-
     }
-
 }

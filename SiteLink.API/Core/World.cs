@@ -243,7 +243,7 @@ public class World : IDisposable
             _sessions.Remove(session);
             Interlocked.Decrement(ref _clientsVersion);
 
-            SiteLinkLogger.Info($"{session.Connection.Tag} Unloaded world (f=green){this}(f=white)");
+            SiteLinkLogger.Info($"{session.Connection?.Tag} Unloaded world (f=green){this}(f=white)");
         }
         finally
         {
@@ -294,7 +294,7 @@ public class World : IDisposable
                     pObject.MoveToWorld(targetWorld);
 
                     if (targetWorld == null)
-                        pObject.Owner.PlayerObject = null;
+                        pObject.Owner.Player = null;
                 }
                 else
                     obj.Value.Destroy(session);

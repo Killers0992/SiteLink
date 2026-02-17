@@ -1,6 +1,7 @@
 ﻿using Hints;
 using Mirror;
 using PlayerRoles;
+using PlayerStatsSystem;
 using RelativePositioning;
 using SiteLink.API.Networking;
 using UnityEngine.SceneManagement;
@@ -45,6 +46,8 @@ namespace SiteLink.API.Misc
                 w.WriteUShort(NetworkMessages.SeedMessage);
                 w.WriteInt(seed);
             });
+
+            SiteLinkLogger.Info("Send seed " + seed);
         }
 
         public static void Scene(this MirrorSender sender, string sceneName, byte op = 0, bool customHandling = false)
@@ -142,6 +145,31 @@ namespace SiteLink.API.Misc
                 int clampedValue = UnityEngine.Mathf.Clamp(UnityEngine.Mathf.CeilToInt(value), 0, 65535);
                 w.WriteUShort((ushort)clampedValue);
             });
+        }
+
+        public static void Noclip(this MirrorSender sender, uint networkId, bool toggled)
+        {
+            sender.Send(w =>
+            {
+                w.WriteUShort(NetworkMessages.StatMessage);
+
+                w.WriteUInt(networkId);
+
+                // 0 HealthStat
+                // 1 AhpStat
+                // 2 StaminaStat
+                // 3 AdminFlagsStat
+                // 4 HumeShieldStat
+                // 5 Vigor Stat
+                w.WriteByte(3);
+
+                w.WriteByte((byte)StatMessageType.CurrentValue);
+
+                if (toggled)
+                    w.WriteByte((byte)AdminFlags.Noclip);
+                else
+                    w.WriteByte((byte)AdminFlags.None);
+            });;
         }
 
         public static void Role(this MirrorSender sender, uint networkId, RoleTypeId role)

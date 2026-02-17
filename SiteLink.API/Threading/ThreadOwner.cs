@@ -17,7 +17,7 @@ public static class ThreadOwner
     /// <param name="threadId">The managed thread ID of the owning thread.</param>
     public static void Register(object obj, string threadName, int threadId)
     {
-        SiteLinkLogger.Info("Register " + obj.GetType().FullName  + " on thread " + threadName +  " (" + threadId + ")");
+        //SiteLinkLogger.Info("Register " + obj.GetType().FullName  + " on thread " + threadName +  " (" + threadId + ")");
 
         _affinity.GetOrCreateValue(obj).Initialize(threadName, threadId);
     }

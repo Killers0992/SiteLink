@@ -12,8 +12,6 @@ namespace SiteLink.API.Networking
 
         public static bool TryGet(string userId, out Connection connection) => ConnectionByUserId.TryGetValue(userId, out connection);
 
-        private static int ThresholdBytes => 65535 * (NetConstants.MaxPacketSize - 6);
-
         private readonly int _ownerThreadId;
 
         public ConnectionStats Stats { get; } = new ConnectionStats();
@@ -63,7 +61,6 @@ namespace SiteLink.API.Networking
         public NetPeer Peer { get; private set; }
 
         public MirrorSender AsServer { get; } // sends to client
-        public MirrorSender AsClient { get; } // sends to server
 
         private double NowSeconds() => Session == null ? 0 : Session.SessionTime.TotalSeconds;
 
@@ -82,21 +79,12 @@ namespace SiteLink.API.Networking
             ConnectionByUserId.Add(PreAuth.UserId, this);
 
             AsServer = new MirrorSender(
-                ThresholdBytes,
+                SiteLinkAPI.ThresholdBytes,
                 NowSeconds,
                 (bytes, offset, length, method) =>
                 {
                     // proxy -> client
                     SendToClient(bytes, offset, length, method);
-                });
-
-            AsClient = new MirrorSender(
-                ThresholdBytes,
-                NowSeconds,
-                (bytes, offset, length, method) =>
-                {
-                    // proxy -> server
-                    Session?.SendToServer(bytes, offset, length, method);
                 });
         }
 
@@ -128,36 +116,36 @@ namespace SiteLink.API.Networking
         /// Connects to a server by name.
         /// </summary>
         /// <param name="name">The server name.</param>
-        public void Connect(string name)
+        public bool Connect(string name, bool silent = false)
         {
             //ThreadOwner.Verify(this);
-            ConnectInternal(name);
+            return ConnectInternal(name, silent);
         }
 
-        private void ConnectInternal(string name)
+        private bool ConnectInternal(string name, bool silent)
         {
             Server server = Server.Get<Server>(name: name);
 
             if (server == null)
             {
                 Disconnect($"Server {name} not found.");
-                return;
+                return false;
             }
 
-            ConnectInternal(server);
+            return ConnectInternal(server, silent);
         }
 
         /// <summary>
         /// Connects to a list of servers in order.
         /// </summary>
         /// <param name="servers">The server names.</param>
-        public void Connect(string[] servers)
+        public bool Connect(string[] servers, bool silent = false)
         {
             //ThreadOwner.Verify(this);
-            ConnectInternal(servers);
+            return ConnectInternal(servers, silent);
         }
 
-        private void ConnectInternal(string[] servers)
+        private bool ConnectInternal(string[] servers, bool silent)
         {
             SiteLinkLogger.Info($"{Tag} Connect to (f=yellow){string.Join("(f=white) -> (f=yellow)", servers)}(f=white)");
 
@@ -172,18 +160,18 @@ namespace SiteLink.API.Networking
                 }
             }
 
-            SessionManager.Singleton.CreateOrSwitchSession(this, serverObjs.ToArray());
+            return SessionManager.Singleton.CreateOrSwitchSession(this, serverObjs.ToArray(), silent) != null;
         }
 
-        public void Connect(Server server)
+        public bool Connect(Server server, bool silent = false)
         {
             //ThreadOwner.Verify(this);
-            ConnectInternal(server);
+            return ConnectInternal(server, silent);
         }
 
-        private void ConnectInternal(Server server)
+        private bool ConnectInternal(Server server, bool silent)
         {
-            SessionManager.Singleton.CreateOrSwitchSession(this, new[] { server });
+            return SessionManager.Singleton.CreateOrSwitchSession(this, new[] { server }, silent) != null;
         }
 
         /// <summary>
@@ -207,7 +195,6 @@ namespace SiteLink.API.Networking
             Session?.Update();
 
             AsServer?.Update();
-            AsClient?.Update();
         }
 
         public void Disconnect(string message = null)

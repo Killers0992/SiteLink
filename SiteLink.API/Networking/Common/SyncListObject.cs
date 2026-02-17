@@ -6,9 +6,21 @@ public class SyncListObject<T> : SyncedNetworkProperty
 {
     public uint Count = 0;
 
+    public List<T> Items;
+
     public SyncListObject(uint count = 0) : base()
     {
         Count = count;
+        Items = new List<T>((int)count);
+    }
+
+    public int Index;
+    public byte Value;
+
+    public void Set(int index, byte val)
+    {
+        Index = index;
+        Value = val;
     }
 
     public override void OnSerializeAll(NetworkWriter writer)
@@ -27,7 +39,10 @@ public class SyncListObject<T> : SyncedNetworkProperty
 
     public override void OnSerializeDelta(NetworkWriter writer)
     {
-        writer.WriteUInt(0);
+        writer.WriteUInt(1);
+        writer.WriteByte((byte)4);
+        writer.WriteUInt((uint)Index);
+        writer.WriteByte(Value);
     }
 
     public override void OnDeserializeAll(NetworkReader reader)

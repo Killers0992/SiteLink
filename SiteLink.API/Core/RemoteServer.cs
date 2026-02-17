@@ -1,4 +1,5 @@
-﻿using UserSettings.ServerSpecific;
+﻿using PlayerRoles;
+using UserSettings.ServerSpecific;
 
 namespace SiteLink.Servers;
 
@@ -39,7 +40,12 @@ public class RemoteServer : Server
 
     public RemoteServer(string name) : base(name) { }
 
-    public override void OnSessionReady(Session session) => session.Connection?.AsServer.ServerSpecificEntries(ServerSettings);
+    public override void OnSessionSpawned(Session session, RoleTypeId role)
+    {
+        SiteLinkLogger.Info("Session " + session.UserId + " spawned as " + role);
+
+        session.Connection?.AsServer.ServerSpecificEntries(ServerSettings);
+    }
 
     public override void OnSessionSSSReponse(Session session, int id)
     {
@@ -47,6 +53,6 @@ public class RemoteServer : Server
             return;
 
         // Use session client to connect to the selected server
-        session.Connection?.Connect(server);
+        session.Connection?.Connect(server, true);
     }
 }

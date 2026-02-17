@@ -189,4 +189,29 @@ public static class Extensions
             }
         }
     }
+
+    public static Quaternion EulerToQuaternion(this VectorInfo vec)
+    {
+        // Convert degrees to radians
+        float radX = vec.X * (float)Math.PI / 180f;
+        float radY = vec.Y * (float)Math.PI / 180f;
+        float radZ = vec.Z * (float)Math.PI / 180f;
+
+        // Unity uses ZXY order
+        float cX = (float)Math.Cos(radX * 0.5f);
+        float sX = (float)Math.Sin(radX * 0.5f);
+        float cY = (float)Math.Cos(radY * 0.5f);
+        float sY = (float)Math.Sin(radY * 0.5f);
+        float cZ = (float)Math.Cos(radZ * 0.5f);
+        float sZ = (float)Math.Sin(radZ * 0.5f);
+
+        Quaternion q;
+
+        q.x = sX * cY * cZ + cX * sY * sZ;
+        q.y = cX * sY * cZ - sX * cY * sZ;
+        q.z = cX * cY * sZ - sX * sY * cZ;
+        q.w = cX * cY * cZ + sX * sY * sZ;
+
+        return q;
+    }
 }

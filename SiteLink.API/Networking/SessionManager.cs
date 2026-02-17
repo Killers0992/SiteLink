@@ -1,4 +1,6 @@
-﻿using SiteLink.API.Threading;
+﻿using SiteLink.API.Events;
+using SiteLink.API.Events.Args;
+using SiteLink.API.Threading;
 
 namespace SiteLink.API.Networking
 {
@@ -124,7 +126,7 @@ namespace SiteLink.API.Networking
             try { session.Dispose(); } catch { }
         }
 
-        public Session CreateOrSwitchSession(Connection connection, Server[] servers)
+        public Session CreateOrSwitchSession(Connection connection, Server[] servers, bool silent)
         {
             string userId = connection.PreAuth.UserId;
 
@@ -132,7 +134,8 @@ namespace SiteLink.API.Networking
 
             if (slot.Active == null && slot.Pending == null)
             {
-                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId);
+                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+
                 WireSessionCallbacks(slot.Pending, connection, false);
 
                 return slot.Pending;
@@ -141,11 +144,16 @@ namespace SiteLink.API.Networking
             // If there is an active connected session, create a pending one
             if (slot.Active != null && slot.Active.Status == SessionStatus.Connected)
             {
+                // If pending sessions exists and its silent prevent from creating new one right away.
+                if (slot.Pending != null && silent)
+                    return null;
+
                 // Dispose any old pending attempt
                 slot.Pending?.Disconnect("Replaced by newer pending session");
                 slot.Pending?.Dispose();
 
-                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId);
+                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+
                 WireSessionCallbacks(slot.Pending, connection, isPending: true);
 
                 //SiteLinkLogger.Info($"{connection.Tag} Created PENDING session to switch servers.");
@@ -157,12 +165,13 @@ namespace SiteLink.API.Networking
             slot.Active?.Disconnect("Active session replaced");
             slot.Active?.Dispose();
 
-            slot.Active = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId);
+            slot.Active = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+
             WireSessionCallbacks(slot.Active, connection, isPending: false);
 
             slot.Active.AttachToConnection(connection);
 
-            SiteLinkLogger.Info($"{connection.Tag} Created ACTIVE session.");
+            //SiteLinkLogger.Info($"{connection.Tag} Created ACTIVE session.");
 
             connection.Session = slot.Active;
 
@@ -250,8 +259,13 @@ namespace SiteLink.API.Networking
 
                 if (isPending)
                 {
+                    ClientConnectionResponseEvent ev = new ClientConnectionResponseEvent(connection, session.ConnectingToServer, new ServerIsFullResponse());
+                    EventManager.Client.InvokeConnectionResponse(ev);
+
+                    if (!ev.IsCancelled && !session.IsSilent)
+                        connection.AsServer.Hint($"Server <color=orange>{resp.Server.Name}</color> is full!", 3f);
+
                     // keep active, kill pending
-                    connection.AsServer.Hint($"Server <color=orange>{resp.Server.Name}</color> is full!", 3f);
                     FailPending(connection.PreAuth.UserId, session, $"full");
                     return;
                 }
@@ -267,7 +281,12 @@ namespace SiteLink.API.Networking
 
                 if (isPending)
                 {
-                    connection.AsServer.Hint($"Server <color=orange>{resp.Server.Name}</color> is offline!", 3f);
+                    ClientConnectionResponseEvent ev = new ClientConnectionResponseEvent(connection, session.ConnectingToServer, new ServerIsOfflineResponse());
+                    EventManager.Client.InvokeConnectionResponse(ev);
+
+                    if (!ev.IsCancelled && !session.IsSilent)
+                        connection.AsServer.Hint($"Server <color=orange>{resp.Server.Name}</color> is offline!", 3f);
+
                     FailPending(connection.PreAuth.UserId, session, $"offline");
                     return;
                 }
@@ -289,7 +308,7 @@ namespace SiteLink.API.Networking
 
             session.OnConnectionDelayed += delay =>
             {
-                if (isPending && connection.Request == null)
+                if (isPending && connection.Request == null && !session.IsSilent)
                     connection.AsServer.Hint($"Server <color=orange>{delay.Server.Name}</color> delayed connection, retrying...", 3f);
             };
         }

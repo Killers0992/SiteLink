@@ -34,7 +34,26 @@ public class MainClass : Plugin
 
     private void OnWaitingForPlayers()
     {
-        ProtocolGenerator.Generate();
+        int index = 0;
+
+        List<string> lines = new List<string>();
+        lines.Add("namespace SiteLink.API.Enums");
+        lines.Add("{");
+        lines.Add("    public enum EffectType");
+        lines.Add("    {");
+
+        foreach (var effect in ReferenceHub.HostHub.playerEffectsController.AllEffects)
+        {
+            lines.Add($"        {effect.name} = {index},");
+            index++;
+        }
+
+        lines.Add("    }");
+        lines.Add("}");
+
+        File.WriteAllLines("D:\\VS Projects\\SiteLink\\SiteLink.API\\Enums\\EffectType.cs", lines);
+
+        //ProtocolGenerator.Generate();
     }
 
     public override void Disable()

@@ -23,11 +23,10 @@ public class ChallengeHandler
         switch (challengeType)
         {
             case ChallengeType.Reply:
-                if (reader.TryGetBytesWithLength(out ClientChallengeResponse))
-                {
-                    SiteLinkLogger.Info("Reconnect back");
-                    Session.Connect(ClientChallengeId, ClientChallengeResponse);
-                }
+                if (!reader.TryGetBytesWithLength(out ClientChallengeResponse))
+                    break;
+
+                Session.Connect(ClientChallengeId, ClientChallengeResponse);
                 break;
 
             case ChallengeType.MD5:

@@ -168,6 +168,12 @@ public class NetworkObject : IDisposable
 
     public void Destroy(Session client)
     {
+        if (client.Connection == null)
+        {
+            SiteLinkLogger.Error($"Failed to destroy {NetworkId} for client {client.UserId} because connection is null!", "NetworkObject");
+            return;
+        }
+
         client.Connection.AsServer.Destroy(NetworkId);
     }
 

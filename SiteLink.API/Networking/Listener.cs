@@ -364,9 +364,6 @@ public class Listener : IDisposable
 
             foreach (var kvp in Connections)
             {
-                SiteLinkLogger.Info(kvp.Value.Peer.ConnectionState);
-                SiteLinkLogger.Info(kvp.Value.Peer.RoundTripTime);
-
                 if (kvp.Value.IsDisposed)
                 {
                     connectionsToRemove.Add(kvp.Value);
@@ -462,7 +459,7 @@ public class Listener : IDisposable
         if (SessionManager.Singleton.TryReattachConnection(connection))
             return;
 
-        connection.Connect(Priorities);
+        connection.Connect(Priorities, true);
     }
 
     void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
@@ -483,13 +480,13 @@ public class Listener : IDisposable
         byte[] bytes = reader.RawData;
         int position = reader.Position;
 
-        if (!_clientToServer.TryRewrite(connection.Session, bytes, position, length, out var outBytes, out var outPos, out var outLen, out bool pooled))
+        if (!_clientToServer.TryRewrite(connection?.Session, bytes, position, length, out var outBytes, out var outPos, out var outLen, out bool pooled))
         {
-            connection.Session.SendToServer(bytes, position, length, deliveryMethod);
+            connection.Session?.SendToServer(bytes, position, length, deliveryMethod);
             return;
         }
 
-        connection.Session.SendToServer(outBytes, outPos, outLen, deliveryMethod);
+        connection.Session?.SendToServer(outBytes, outPos, outLen, deliveryMethod);
 
         if (pooled && !ReferenceEquals(outBytes, bytes))
             _byteArrayPool.Return(outBytes);

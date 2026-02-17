@@ -36,7 +36,7 @@ public class SendCommand
 
                     client.Execute(() =>
                     {
-                        client.Connect(server);
+                        client.Connect(server, true);
                     });
                 }
 
@@ -51,7 +51,7 @@ public class SendCommand
 
                 targetPlayer.Execute(() =>
                 {
-                    targetPlayer.Connect(server);
+                    targetPlayer.Connect(server, true);
                 });
                 break;
             case true when Server.TryGetByName(args[0], out Server serverFrom) && server != null:
@@ -66,7 +66,7 @@ public class SendCommand
                 {
                     session?.Connection.Execute(() =>
                     {
-                        session?.Connection.Connect(server);
+                        session?.Connection.Connect(server, true);
                     });
                 }
 

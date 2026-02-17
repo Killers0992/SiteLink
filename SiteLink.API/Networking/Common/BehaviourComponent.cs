@@ -28,6 +28,11 @@ public class BehaviourComponent
         SyncVarDirtyBits |= dirtyBit;
     }
 
+    public void SetSyncObjectDirtyBit(ulong dirtyBit)
+    {
+        SyncObjectsDirtyBits |= dirtyBit;
+    }
+
     public void ClearAllDirtyBits()
     {
         SyncVarDirtyBits = 0;

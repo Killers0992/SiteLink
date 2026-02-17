@@ -1,4 +1,5 @@
-﻿using SiteLink.API.Events;
+﻿using PlayerRoles;
+using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 
 namespace SiteLink.API.Core;
@@ -150,6 +151,8 @@ public class Server
     internal void InternalSessionAddPlayer(Session session) => OnSessionAddPlayer(session);
 
     internal void InternalSessionReady(Session session) => OnSessionReady(session);
+
+    public virtual void OnSessionSpawned(Session session, RoleTypeId role) { }
 
     public virtual bool OnSessionConnecting(Session session) => false;
 

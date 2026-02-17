@@ -1,4 +1,6 @@
-﻿using SiteLink.API.Metrics;
+﻿using Org.BouncyCastle.Tls;
+using PlayerRoles;
+using SiteLink.API.Metrics;
 using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
@@ -62,7 +64,7 @@ namespace SiteLink.API.Networking
 
         private World _world;
 
-        public PlayerObject PlayerObject { get; set; }
+        public PlayerObject Player { get; set; }
 
         public SessionStats Stats { get; } = new SessionStats();
 
@@ -78,13 +80,13 @@ namespace SiteLink.API.Networking
                 if (_world != null)
                 {
                     if (value == null)
-                        PlayerObject = null;
+                        Player = null;
 
                     _world.Unload(this, value);
                 }
                 else
                 {
-                    PlayerObject = null;
+                    Player = null;
                 }
 
                 _world = value;
@@ -93,6 +95,8 @@ namespace SiteLink.API.Networking
                     value.Load(this);
             }
         }
+
+        public bool IsSilent { get; }
 
         // Position System
 
@@ -230,8 +234,11 @@ namespace SiteLink.API.Networking
         /// </summary>
         public int OwnerThreadId => _ownerThreadId;
 
-        public Session(Connection connection, Server[] servers, int ownerThreadId)
+        public MirrorSender AsClient { get; } // sends to server
+
+        public Session(Connection connection, Server[] servers, int ownerThreadId, bool isSilent)
         {
+            IsSilent = isSilent;
             Connection = connection;
 
             _ownerThreadId = ownerThreadId;
@@ -241,9 +248,21 @@ namespace SiteLink.API.Networking
 
             Challenge = new ChallengeHandler(this);
 
-            SiteLinkLogger.Info(servers.Length > 1
-                ? $"{Connection.Tag} Connecting to one of (f=yellow){servers.Length}(f=white) servers..."
-                : $"{Connection.Tag} Connecting to server (f=yellow){servers[0].Name}(f=white)...");
+            if (!IsSilent)
+                SiteLinkLogger.Info(servers.Length > 1
+                    ? $"{Connection.Tag} Connecting to one of (f=yellow){servers.Length}(f=white) servers..."
+                    : $"{Connection.Tag} Connecting to server (f=yellow){servers[0].Name}(f=white)...");
+
+            AsClient = new MirrorSender(
+                SiteLinkAPI.ThresholdBytes,
+                () => SessionTime.TotalSeconds,
+                (bytes, offset, length, method) =>
+                {
+                    // proxy -> server
+                    SendToServer(bytes, offset, length, method);
+                });
+
+            _serverToClient.Register(NetworkMessages.RoleSyncInfo, OnRoleSync);
 
             _serverToClient.Register(NetworkMessages.SeedMessage, static (id, r, original, session) =>
             {
@@ -251,28 +270,90 @@ namespace SiteLink.API.Networking
 
                 session.MapSeed = seed;
 
-                SiteLinkLogger.Info(session.Connection.Tag + $" Received map seed (f=green){seed}(f=white) from server.");
+                if (session.Connection.Session == null)
+                {
+                    SiteLinkLogger.Info(session.Connection.Tag + $" Received map seed (f=green){seed}(f=white) from server but let client take seed");
+                    return InterceptResult.Pass();
+                }
 
-                return InterceptResult.Pass();
+                SiteLinkLogger.Info(session.Connection.Tag + $" Received map seed (f=green){seed}(f=white) from server but drop packet instead.");
+
+                return InterceptResult.Drop();
             });
+
+            _serverToClient.Register(NetworkMessages.NetworkPingMessage, OnPing);
+            _serverToClient.Register(NetworkMessages.SpawnMessage, OnSpawn);
         }
 
-        public void SpawnPlayer()
+        private InterceptResult OnSpawn(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
         {
-            if (PlayerObject != null)
+            uint networkId = reader.ReadUInt();
+            bool isLocalPlayer = reader.ReadBool();
+            bool isOwner = reader.ReadBool();
+
+            ulong sceneId = reader.ReadULong();
+            uint assetId = reader.ReadUInt();
+
+            switch (assetId)
             {
-                SiteLinkLogger.Info($"Player object already exists for client ");
+                case PlayerObject.ObjectAssetId when isLocalPlayer && isOwner:
+                    session.NetworkId = networkId;
+
+                    session.Player = new PlayerObject(null, session, networkId);
+
+                    SiteLinkLogger.Info("Received network id for player obj " + networkId);
+                    break;
+            }
+
+            return InterceptResult.Pass();
+        }
+
+        private InterceptResult OnRoleSync(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
+        {
+            uint playerId = reader.ReadUInt();
+            RoleTypeId role = reader.ReadRoleType();
+
+            // If session receives role change.
+            if (playerId == session.NetworkId)
+            {
+                session?.Server.OnSessionSpawned(session, role);
+            }
+
+
+            return InterceptResult.Pass();
+        }
+
+        private InterceptResult OnPing(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
+        {
+
+            if (IsDetached)
+            {
+                AsClient.Send(w =>
+                {
+                    w.WriteUShort(NetworkMessages.NetworkPongMessage);
+                    w.WriteDouble(r.ReadDouble());
+                });
+
+                SiteLinkLogger.Info("Received ping send pong back");
+            }
+
+            return InterceptResult.Pass();
+        }
+
+        public void SpawnPlayer(Vector3 pos)
+        {
+            if (Player != null)
+            {
+                SiteLinkLogger.Error($"Player object already exists for {UserId}", "Session");
                 return;
             }
 
-            PlayerObject = new PlayerObject(World);
-            PlayerObject.AssignOwner(this);
+            Player = new PlayerObject(World);
+            Player.AssignOwner(this);
 
-            PlayerObject.Position = new Vector3(0f, -299f, 0f);
+            Player.Position = pos;
 
-            NetworkId = PlayerObject.NetworkId;
-
-            SiteLinkLogger.Info($"Created new player object for client.");
+            NetworkId = Player.NetworkId;
         }
 
         public void AttachToConnection(Connection connection)
@@ -340,8 +421,6 @@ namespace SiteLink.API.Networking
 
             EnsureNet();
 
-            SiteLinkLogger.Info("Connect to " + ConnectingToServer.IpAddress + ":" + ConnectingToServer.Port);
-
             _netManager.Connect(ConnectingToServer.IpAddress, ConnectingToServer.Port, Connection.PreAuth.Create(ConnectingToServer.ForwardIpAddress, challengeId, challengeResponse));
         }
 
@@ -352,7 +431,9 @@ namespace SiteLink.API.Networking
             Status = SessionStatus.Retrying;
 
             NextRetry = DateTime.Now.Add(delay);
-            SiteLinkLogger.Info($"{Connection.Tag} Retrying connection to {ConnectingToServer.Tag} in {delay.TotalSeconds} seconds...");
+
+            if (!IsSilent)
+                SiteLinkLogger.Info($"{Connection.Tag} Retrying connection to {ConnectingToServer.Tag} in {delay.TotalSeconds} seconds...");
         }
 
         public void SendToServer(byte[] data, int offset, int length, DeliveryMethod method)
@@ -379,8 +460,8 @@ namespace SiteLink.API.Networking
 
         public void Update()
         {
-            if (_netManager != null)
-                _netManager.PollEvents();
+            _netManager?.PollEvents();
+            AsClient?.Update();
 
             if (ConnectingToServer == null && ConnectToServers != null && ConnectToServers.Count > 0)
             {
@@ -449,12 +530,14 @@ namespace SiteLink.API.Networking
                     break;
 
                 case DisconnectReason.Timeout:
-                    SiteLinkLogger.Info($"{Server.Name} Timeout!");
+                    //SiteLinkLogger.Info($"{Server.Name} Timeout!");
 
                     Status = SessionStatus.Timeout;
                     break;
 
                 case DisconnectReason.ConnectionFailed when disconnectInfo.AdditionalData.RawData == null:
+                    //SiteLinkLogger.Info($"Server is offline");
+
                     OnServerOffline.Invoke(new ServerOfflineResponse(ConnectingToServer, ConnectToServers.Count == 0));
 
                     ConnectingToServer = null;
@@ -479,7 +562,7 @@ namespace SiteLink.API.Networking
                             if (!disconnectInfo.AdditionalData.TryGetByte(out byte offset))
                                 break;
 
-                            SiteLinkLogger.Info("Delayed " + offset);
+                            //SiteLinkLogger.Info("Delayed " + offset);
 
                             OnConnectionDelayed.Invoke(new ConnectionDelayedResponse(ConnectingToServer, offset));
                             break;
@@ -499,8 +582,6 @@ namespace SiteLink.API.Networking
                             break;
 
                         case RejectionReason.Challenge:
-                            SiteLinkLogger.Info("Challenge");
-
                             Challenge.ProcessChallenge(disconnectInfo.AdditionalData);
                             break;
 
@@ -576,6 +657,8 @@ namespace SiteLink.API.Networking
 
         public void Dispose()
         {
+            World = null;
+
             _connectionReference = null;
 
             Challenge = null;

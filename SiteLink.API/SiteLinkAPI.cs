@@ -14,6 +14,8 @@ public class SiteLinkAPI
     public const string GameVersionText = "14.2.5";
     public const string ApiVersionText = "1.1.0";
 
+    public static int ThresholdBytes => 65535 * (NetConstants.MaxPacketSize - 6);
+
     public static Version GameVersion
     {
         get
