@@ -15,7 +15,7 @@ public class LanternPickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public CollisionDetectionPickupComponent CollisionDetectionPickup { get; }
 
-    public LanternPickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public LanternPickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

@@ -1,6 +1,4 @@
-﻿using System.Reflection.Metadata;
-
-namespace SiteLink.API.Plugins;
+﻿namespace SiteLink.API.Plugins;
 
 public static class PluginsManager
 {
@@ -91,7 +89,7 @@ public static class PluginsManager
 
             var missingAssemblies = pluginReferences.Where(x => !loadedAssemblies.ContainsKey(x.Key)).ToList();
 
-            foreach(var missing in missingAssemblies)
+            foreach (var missing in missingAssemblies)
             {
                 SiteLinkLogger.Info($"Missing dependency '(f=yellow){missing.Key}(f=white)' v(f=yellow){missing.Value.Version.ToString(3)}(f=white)", "PluginsManager");
             }
@@ -168,9 +166,6 @@ public static class PluginsManager
         if (NameToAssembly.TryGetValue(args.Name, out Assembly assembly))
             return assembly;
 
-        AssemblyNameInfo nameInfo = new AssemblyNameInfo(args.Name);
-
-        Console.WriteLine(nameInfo.Version);
         return null;
     }
 }

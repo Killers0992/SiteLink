@@ -1,20 +1,24 @@
 
 namespace SiteLink.API.Networking.Components;
 
-public class SinkholeEnvironmentalHazardComponent : BehaviourComponent
+public class SinkholeEnvironmentalHazardComponent : EnvironmentalHazardComponent
 {
-
     public SinkholeEnvironmentalHazardComponent(NetworkObject networkObject) : base(networkObject)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             return;
         }
+
+        writer.WriteULong(SyncVarDirtyBits);
+
     }
+
 }

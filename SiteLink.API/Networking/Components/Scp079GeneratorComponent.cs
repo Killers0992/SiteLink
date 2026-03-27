@@ -3,9 +3,8 @@ using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class Scp079GeneratorComponent : BehaviourComponent
+public class Scp079GeneratorComponent : SpawnableStructureComponent
 {
-
     private float _totalActivationTime;
 
     private float _totalDeactivationTime;
@@ -19,7 +18,7 @@ public class Scp079GeneratorComponent : BehaviourComponent
         get => _totalActivationTime;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _totalActivationTime = value;
         }
     }
@@ -29,7 +28,7 @@ public class Scp079GeneratorComponent : BehaviourComponent
         get => _totalDeactivationTime;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _totalDeactivationTime = value;
         }
     }
@@ -39,7 +38,7 @@ public class Scp079GeneratorComponent : BehaviourComponent
         get => _flags;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _flags = value;
         }
     }
@@ -49,19 +48,20 @@ public class Scp079GeneratorComponent : BehaviourComponent
         get => _syncTime;
         set
         {
-            SetSyncVarDirtyBit(8);
+            SetSyncVarDirtyBit(8UL);
             _syncTime = value;
         }
     }
 
     public Scp079GeneratorComponent(NetworkObject networkObject) : base(networkObject)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteFloat(_totalActivationTime);
@@ -71,24 +71,28 @@ public class Scp079GeneratorComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteFloat(_totalActivationTime);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteFloat(_totalDeactivationTime);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteByte(_flags);
         }
 
-        if ((SyncVarDirtyBits & 8U) != 0)
+        if ((SyncVarDirtyBits & 8UL) != 0UL)
         {
             writer.WriteShort(_syncTime);
         }
     }
+
 }

@@ -1,5 +1,7 @@
-﻿using SiteLink.API.Events;
+﻿using PlayerRoles;
+using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
+using SiteLink.API.Networking.Connections;
 
 namespace SiteLink.API.Core;
 
@@ -53,19 +55,27 @@ public class Server
         }
         else
         {
-            var pair = RegisteredServers.FirstOrDefault();
-
-            if (pair.Value != null)
-                return pair.Value;
+            using var enumerator = RegisteredServers.GetEnumerator();
+            if (enumerator.MoveNext())
+                return enumerator.Current.Value;
         }
 
         return null;
     }
 
+    private readonly ConcurrentDictionary<Session, byte> _sessions = new();
+
+
     private int _index = -1;
     private ServerSettings _customSettings;
 
     public string Name { get; }
+
+    public BridgeConnection BridgeConnection { get; set; }
+
+    public int SessionsCount => _sessions.Count;
+
+    public Session[] GetSessionsSnapshot() => _sessions.Keys.ToArray();
 
     public ServerSettings Settings
     {
@@ -96,65 +106,83 @@ public class Server
 
     public string DisplayName => Settings.DisplayName;
     public string IpAddress => Settings.Address;
+
     public int Port => Settings.Port;
+
     public bool ForwardIpAddress => Settings.ForwardIpAddress;
 
     public bool IsSimulated { get; private set; }
 
     public string Tag => $"[(f=yellow){Name.ToLower()}(f=white)]";
 
-    public List<Client> Clients { get; } = new List<Client>();
-    public int ClientsCount => Clients.Count;
-    public int MaxClientsCount => Settings.MaxClients;
+    public int MaxSessions => Settings.MaxClients;
 
     public Server(string name, ServerSettings customSettings = null, bool isSimulated = false)
     {
         Name = name;
         _customSettings = customSettings;
+
         IsSimulated = isSimulated;
 
         SiteLinkLogger.Info($"{Tag} Server registered under ip (f=green){IpAddress}:{Port}(f=white)");
     }
 
-    public bool InternalClientConnecting(Client client)
-    {
-        bool canJoin = OnClientConnecting(client);
+    public void SendToBridge(ushort messageId,
+        Action<NetDataWriter> payload,
+        DeliveryMethod method = DeliveryMethod.ReliableOrdered) => SiteLinkBridge.SendTo(this, messageId, payload, method);
 
-        return canJoin;
+    internal bool InternalSessionConnecting(Session session) => OnSessionConnecting(session);
+
+    internal bool InternalSessionConnected(Session session)
+    {
+        if (_sessions.TryAdd(session, 0))
+        {
+            OnSessionConnected(session);
+            return true;
+        }
+
+        return false;
     }
 
-    public void InternalClientConnected(Client client)
+    internal bool InternalSessionDisconnected(Session session)
     {
-        Clients.Add(client);
-        OnClientConnected(client);
+        if (_sessions.TryRemove(session, out _))
+        {
+            OnSessionDisconnected(session);
+            return true;
+        }
+
+        return false;
     }
 
+    internal void InternalSessionAddPlayer(Session session) => OnSessionAddPlayer(session);
 
-    public void InternalClientDisconnected(Client client)
-    {
-        Clients.Remove(client);
-        OnClientDisconnected(client);
-    }
+    internal void InternalSessionReady(Session session) => OnSessionReady(session);
 
-    public virtual bool OnClientConnecting(Client client) => false;
+    public virtual void OnSessionSpawned(Session session, RoleTypeId role) { }
 
-    public virtual void OnClientConnected(Client client) { }
-    public virtual void OnClientDisconnected(Client client) { }
+    public virtual bool OnSessionConnecting(Session session) => false;
 
-    public virtual void OnClientReady(Client client) { }
-    public virtual void OnClientSpawnPlayer(Client client) { }
+    public virtual void OnSessionConnected(Session session) { }
 
-    public virtual void OnClientSpawned(Client client) { }
+    public virtual void OnSessionDisconnected(Session session) { }
 
-    public virtual void OnClientSSSReponse(Client client, int id) { }
+    public virtual void OnSessionSSSReponse(Session session, int id) { }
+
+    public virtual void OnSessionReady(Session session) { }
+
+    public virtual void OnSessionAddPlayer(Session session) { }
 
     public virtual void OnUpdate() { }
 
     public void Destroy()
     {
-        foreach (Client client in Clients)
+        var sessions = GetSessionsSnapshot();
+
+        foreach (var s in sessions)
         {
-            client.Disconnect("Server removed from config.");
+            try { s.Disconnect("Server removed from config."); } catch { }
+            try { s.Dispose(); } catch { }
         }
 
         SiteLinkLogger.Info($"{Tag} Server unregistered.");

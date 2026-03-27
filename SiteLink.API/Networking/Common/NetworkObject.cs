@@ -12,18 +12,19 @@ public class NetworkObject : IDisposable
     public Quaternion Rotation { get; set; } = Quaternion.identity;
     public Vector3 Scale { get; set; } = Vector3.one;
 
-    public Client Owner { get; private set; }
-
     public World World { get; private set; }
+    public Session Owner { get; private set; }
 
     public BehaviourComponent[] Behaviours { get; set; }
 
-    public NetworkObject(World world, Client owner, uint networkId = 0)
+    public List<Session> Observers = new List<Session>();
+
+    public NetworkObject(World world, Session owner, uint networkId = 0)
     {
         Owner = owner;
         World = world;
 
-        if (networkId != 0)
+        if (NetworkId == 0)
             NetworkId = networkId;
 
         if (NetworkId == 0)
@@ -33,7 +34,7 @@ public class NetworkObject : IDisposable
         }
         else
         {
-            NetworkId = networkId;
+            networkId = NetworkId;
 
             if (world != null && !world.Objects.ContainsKey(networkId))
                 world.Objects.Add(networkId, this);
@@ -53,8 +54,14 @@ public class NetworkObject : IDisposable
         World = world;
     }
 
-    public void SendUpdate(Client client)
+    public void SendUpdate(Session client)
     {
+        if (!Observers.Contains(client))
+        {
+            SpawnWithPayload(client);
+            return;
+        }
+
         NetworkWriter wr2 = Serialize(false);
 
         if (wr2 == null)
@@ -65,7 +72,7 @@ public class NetworkObject : IDisposable
         wr.WriteUInt(NetworkId);
         wr.WriteArraySegmentAndSize(wr2.ToArraySegment());
 
-        client.SendMirrorData(wr);
+        client.Connection.AsServer.Send(wr);
     }
 
     public void Deserialize(NetworkReader reader, bool intialState)
@@ -154,59 +161,60 @@ public class NetworkObject : IDisposable
         return bit;
     }
 
-    public void AssignOwner(Client owner)
+    public void AssignOwner(Session owner)
     {
         Owner = owner;
     }
 
-    public void Destroy(Client client)
+    public void Destroy(Session client)
     {
-        client.DestroyObject(NetworkId);
+        if (client.Connection == null)
+        {
+            SiteLinkLogger.Error($"Failed to destroy {NetworkId} for client {client.UserId} because connection is null!", "NetworkObject");
+            return;
+        }
+
+        client.Connection.AsServer.Destroy(NetworkId);
     }
 
     public void Destroy()
     {
         if (Owner != null)
-            Owner.DestroyObject(NetworkId);
+            Owner.Connection.AsServer.Destroy(NetworkId);
 
         Dispose();
     }
 
-    public void SpawnWithPayload(Client client)
+    public void SpawnWithPayload(Session client)
     {
         NetworkWriter wr2 = Serialize(true);
         Spawn(client, wr2.ToArraySegment());
     }
 
-    public void Spawn(Client client, ArraySegment<byte> payload = default)
+    public void Spawn(Session client, ArraySegment<byte> payload = default)
     {
-        NetworkWriter wr = new NetworkWriter();
+        client.Connection.AsServer.Spawn(
+            NetworkId,
+            Owner == client,
+            Owner == client,
+            SceneId,
+            AssetId,
+            Position,
+            Rotation,
+            Scale,
+            payload);
 
-        wr.WriteUShort(NetworkMessageId<SpawnMessage>.Id);
-
-        wr.WriteUInt(NetworkId);
-
-        // IsLocalPlayer
-        wr.WriteBool(Owner == client);
-        // IsOwner
-        wr.WriteBool(Owner == client);
-
-        wr.WriteULong(SceneId);
-        wr.WriteUInt(AssetId);
-
-        wr.WriteVector3(Position);
-        wr.WriteQuaternion(Rotation);
-        wr.WriteVector3(Scale);
-
-        wr.WriteArraySegmentAndSize(payload);
-
-        client.SendMirrorData(wr);
+        Observers.Add(client);
     }
 
-    public virtual void OnReceiveCommand(byte componentIndex, ushort functionHash, ArraySegment<byte> payload = default)
+    public virtual bool OnReceiveCommand(byte componentIndex, ushort functionHash, NetworkReader reader)
     {
+        bool runCommand = true;
+
         if (Behaviours.Length > componentIndex && Behaviours[componentIndex] != null)
-            Behaviours[componentIndex].OnReceiveCommand(functionHash, payload);
+            runCommand = Behaviours[componentIndex].OnReceiveCommand(functionHash, reader);
+
+        return runCommand;
     }
 
     public void Dispose()
@@ -215,4 +223,3 @@ public class NetworkObject : IDisposable
         Owner = null;
     }
 }
-

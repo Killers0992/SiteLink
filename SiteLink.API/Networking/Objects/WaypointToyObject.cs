@@ -15,7 +15,7 @@ public class WaypointToyObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public WaypointToyComponent WaypointToy { get; }
 
-    public WaypointToyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public WaypointToyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

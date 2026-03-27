@@ -6,14 +6,14 @@ public class ChallengeHandler
     public ushort ClientChallengeSecretLen;
     public byte[] ClientChallenge, ClientChallengeBase, ClientChallengeResponse;
 
-    public Connection Parent;
+    public Session Session;
 
-    public ChallengeHandler(Connection parent)
+    public ChallengeHandler(Session session)
     {
-        Parent = parent;
+        Session = session;
     }
 
-    public void ProcessChallenge(bool forwardIpAddress, NetPacketReader reader)
+    public void ProcessChallenge(NetPacketReader reader)
     {
         if (!reader.TryGetByte(out byte mode) || !reader.TryGetInt(out ClientChallengeId))
             return;
@@ -23,10 +23,10 @@ public class ChallengeHandler
         switch (challengeType)
         {
             case ChallengeType.Reply:
-                if (reader.TryGetBytesWithLength(out ClientChallengeResponse))
-                {
-                    Parent.Reconnect(Parent.Client.PreAuth.Create(forwardIpAddress, ClientChallengeId, ClientChallengeResponse));
-                }
+                if (!reader.TryGetBytesWithLength(out ClientChallengeResponse))
+                    break;
+
+                Session.Connect(ClientChallengeId, ClientChallengeResponse);
                 break;
 
             case ChallengeType.MD5:

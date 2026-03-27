@@ -3,18 +3,26 @@ namespace SiteLink.API.Networking.Components;
 
 public class PlayerStatsComponent : BehaviourComponent
 {
-
-    public PlayerStatsComponent(NetworkObject networkObject) : base(networkObject)
+    public PlayerStatsComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public PlayerStatsComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             return;
         }
+
+        writer.WriteULong(SyncVarDirtyBits);
+
     }
+
 }

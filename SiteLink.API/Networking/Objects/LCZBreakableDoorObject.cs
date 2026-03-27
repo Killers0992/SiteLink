@@ -16,7 +16,7 @@ public class LCZBreakableDoorObject : NetworkObject
     public BreakableDoorComponent BreakableDoor { get; }
     public SpawnableRoomConnectorComponent SpawnableRoomConnector { get; }
 
-    public LCZBreakableDoorObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public LCZBreakableDoorObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

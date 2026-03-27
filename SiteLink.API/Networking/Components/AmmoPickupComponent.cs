@@ -1,59 +1,44 @@
-using InventorySystem.Items.Pickups;
 using Mirror;
 using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class AmmoPickupComponent : BehaviourComponent
+public class AmmoPickupComponent : ItemPickupBaseComponent
 {
-
-    private PickupSyncInfo _info;
-
     private ushort _savedAmmo;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
 
     public ushort SavedAmmo
     {
         get => _savedAmmo;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _savedAmmo = value;
         }
     }
 
     public AmmoPickupComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
             writer.WriteUShort(_savedAmmo);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteUShort(_savedAmmo);
         }
     }
+
 }

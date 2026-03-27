@@ -14,7 +14,7 @@ public class TantrumObjBrownCandyObject : NetworkObject
 
     public override uint AssetId { get; } = ObjectAssetId;
 
-    public TantrumObjBrownCandyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public TantrumObjBrownCandyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[0];

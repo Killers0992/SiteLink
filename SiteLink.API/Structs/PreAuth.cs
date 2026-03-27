@@ -8,6 +8,8 @@ public struct PreAuth
     public bool BackwardCompatibility;
     public byte BackwardRevision;
 
+    public ClientType ClientType;
+
     public string UserId;
 
     public long Expiration;
@@ -20,9 +22,24 @@ public struct PreAuth
 
     public string IpAddress;
 
-    public PreAuth(Version clientVersion, bool backwardCompatibility, byte backwardRevision, string userId, long expiration, CentralAuthPreauthFlags centralFlags, string country, byte[] signature, string ipAddress)
+    public string SecretKey;
+    public Server TargetServer;
+
+    public PreAuth(string secretKey, Server targetServer)
+    {
+        ClientType = ClientType.Bridge;
+
+        SecretKey = secretKey;
+
+        TargetServer = targetServer;
+    }
+
+    public PreAuth(Version clientVersion, ClientType clientType, bool backwardCompatibility, byte backwardRevision, string userId, long expiration, CentralAuthPreauthFlags centralFlags, string country, byte[] signature, string ipAddress)
     {
         ClientVersion = clientVersion;
+
+        ClientType = clientType;
+
         BackwardCompatibility = backwardCompatibility;
         BackwardRevision = backwardRevision;
 
@@ -89,11 +106,36 @@ public struct PreAuth
 
         ClientType clientType = (ClientType)rawClientType;
 
-        if (clientType == ClientType.VerificationService)
+        switch (clientType)
         {
-            rejectForce = true;
-            response = DisconnectType.ForbiddenClientType;
-            return false;
+            case ClientType.VerificationService:
+                rejectForce = true;
+                response = DisconnectType.ForbiddenClientType;
+                return false;
+
+            case ClientType.Bridge:
+                if (!reader.TryGetString(out string secretKey))
+                {
+                    rejectForce = true;
+                    response = DisconnectType.ForbiddenClientType;
+                    return false;
+                }
+
+                Server targetServer = Server.RegisteredServers.Values
+                    .FirstOrDefault(x =>
+                        x.Settings.Bridge.Enabled &&
+                        x.Settings.Bridge.SecretKey == secretKey);
+
+                if (targetServer == null)
+                {
+                    rejectForce = true;
+                    response = DisconnectType.ForbiddenClientType;
+                    return false;
+                }
+
+                preAuth = new PreAuth(secretKey, targetServer);
+                response = DisconnectType.Valid;
+                return true;
         }
 
         if (!reader.TryGetByte(out byte major))
@@ -198,13 +240,6 @@ public struct PreAuth
             return false;
         }
 
-        if (!Enum.IsDefined(typeof(CentralAuthPreauthFlags), rawCentralFlags))
-        {
-            rejectForce = true;
-            response = DisconnectType.CentralFlagsOutOfRange;
-            return false;
-        }
-
         CentralAuthPreauthFlags centralFlags = (CentralAuthPreauthFlags) rawCentralFlags;
 
         if (!reader.TryGetString(out string region))
@@ -228,7 +263,7 @@ public struct PreAuth
             return false;
         }
 
-        preAuth = new PreAuth(clientVersion, backwardCompatibility, backwardRevision, userId, expiration, centralFlags, region, signature, connectionIp);
+        preAuth = new PreAuth(clientVersion, clientType, backwardCompatibility, backwardRevision, userId, expiration, centralFlags, region, signature, connectionIp);
         response = DisconnectType.Valid;
         return true;
     }

@@ -13,6 +13,16 @@ public static class Extensions
 
     public const char ESC = (char)27;
 
+    public static void RejectWithReason(
+        this ConnectionRequest request,
+        NetDataWriter writer,
+        RejectionReason reason)
+    {
+        writer.Reset();
+        writer.Put((byte)reason);
+        request.RejectForce(writer);
+    }
+
     public static string ParseVersion(this string version)
     {
         if (_version != version)
@@ -61,15 +71,28 @@ public static class Extensions
 
     public static string ToReadableString(this TimeSpan span)
     {
-        string formatted = string.Format("{0}{1}{2}{3}",
-            span.Duration().Days > 0 ? string.Format("{0:0} day{1}, ", span.Days, span.Days == 1 ? string.Empty : "s") : string.Empty,
-            span.Duration().Hours > 0 ? string.Format("{0:0} hour{1}, ", span.Hours, span.Hours == 1 ? string.Empty : "s") : string.Empty,
-            span.Duration().Minutes > 0 ? string.Format("{0:0} minute{1}, ", span.Minutes, span.Minutes == 1 ? string.Empty : "s") : string.Empty,
-            span.Duration().Seconds > 0 ? string.Format("{0:0} second{1}", span.Seconds, span.Seconds == 1 ? string.Empty : "s") : string.Empty);
+        var duration = span.Duration();
+        var sb = new StringBuilder(64);
 
-        if (formatted.EndsWith(", ")) formatted = formatted.Substring(0, formatted.Length - 2);
+        if (duration.Days > 0)
+            sb.AppendFormat("{0:0} day{1}, ", duration.Days, duration.Days == 1 ? string.Empty : "s");
 
-        if (string.IsNullOrEmpty(formatted)) formatted = "0 seconds";
+        if (duration.Hours > 0)
+            sb.AppendFormat("{0:0} hour{1}, ", duration.Hours, duration.Hours == 1 ? string.Empty : "s");
+
+        if (duration.Minutes > 0)
+            sb.AppendFormat("{0:0} minute{1}, ", duration.Minutes, duration.Minutes == 1 ? string.Empty : "s");
+
+        if (duration.Seconds > 0)
+            sb.AppendFormat("{0:0} second{1}", duration.Seconds, duration.Seconds == 1 ? string.Empty : "s");
+
+        string formatted = sb.ToString();
+
+        if (formatted.EndsWith(", "))
+            formatted = formatted.Substring(0, formatted.Length - 2);
+
+        if (string.IsNullOrEmpty(formatted))
+            formatted = "0 seconds";
 
         return formatted;
     }
@@ -165,5 +188,30 @@ public static class Extensions
                 SiteLinkLogger.Error($"Exception while invoking event (f=green){ev.GetType().Name}(f=red) {ex}", "EventManager");
             }
         }
+    }
+
+    public static Quaternion EulerToQuaternion(this VectorInfo vec)
+    {
+        // Convert degrees to radians
+        float radX = vec.X * (float)Math.PI / 180f;
+        float radY = vec.Y * (float)Math.PI / 180f;
+        float radZ = vec.Z * (float)Math.PI / 180f;
+
+        // Unity uses ZXY order
+        float cX = (float)Math.Cos(radX * 0.5f);
+        float sX = (float)Math.Sin(radX * 0.5f);
+        float cY = (float)Math.Cos(radY * 0.5f);
+        float sY = (float)Math.Sin(radY * 0.5f);
+        float cZ = (float)Math.Cos(radZ * 0.5f);
+        float sZ = (float)Math.Sin(radZ * 0.5f);
+
+        Quaternion q;
+
+        q.x = sX * cY * cZ + cX * sY * sZ;
+        q.y = cX * sY * cZ - sX * cY * sZ;
+        q.z = cX * cY * sZ - sX * sY * cZ;
+        q.w = cX * cY * cZ + sX * sY * sZ;
+
+        return q;
     }
 }

@@ -1,22 +1,10 @@
 using Mirror;
-using UnityEngine;
 using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class SpeakerToyComponent : BehaviourComponent
+public class SpeakerToyComponent : AdminToyBaseComponent
 {
-
-    private Vector3 _position;
-
-    private Quaternion _rotation;
-
-    private Vector3 _scale;
-
-    private byte _movementSmoothing;
-
-    private bool _isStatic;
-
     private byte _controllerId;
 
     private bool _isSpatial;
@@ -27,62 +15,12 @@ public class SpeakerToyComponent : BehaviourComponent
 
     private float _maxDistance;
 
-    public Vector3 Position
-    {
-        get => _position;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _position = value;
-        }
-    }
-
-    public Quaternion Rotation
-    {
-        get => _rotation;
-        set
-        {
-            SetSyncVarDirtyBit(2);
-            _rotation = value;
-        }
-    }
-
-    public Vector3 Scale
-    {
-        get => _scale;
-        set
-        {
-            SetSyncVarDirtyBit(4);
-            _scale = value;
-        }
-    }
-
-    public byte MovementSmoothing
-    {
-        get => _movementSmoothing;
-        set
-        {
-            SetSyncVarDirtyBit(8);
-            _movementSmoothing = value;
-        }
-    }
-
-    public bool IsStatic
-    {
-        get => _isStatic;
-        set
-        {
-            SetSyncVarDirtyBit(16);
-            _isStatic = value;
-        }
-    }
-
     public byte ControllerId
     {
         get => _controllerId;
         set
         {
-            SetSyncVarDirtyBit(32);
+            SetSyncVarDirtyBit(32UL);
             _controllerId = value;
         }
     }
@@ -92,7 +30,7 @@ public class SpeakerToyComponent : BehaviourComponent
         get => _isSpatial;
         set
         {
-            SetSyncVarDirtyBit(64);
+            SetSyncVarDirtyBit(64UL);
             _isSpatial = value;
         }
     }
@@ -102,7 +40,7 @@ public class SpeakerToyComponent : BehaviourComponent
         get => _volume;
         set
         {
-            SetSyncVarDirtyBit(128);
+            SetSyncVarDirtyBit(128UL);
             _volume = value;
         }
     }
@@ -112,7 +50,7 @@ public class SpeakerToyComponent : BehaviourComponent
         get => _minDistance;
         set
         {
-            SetSyncVarDirtyBit(256);
+            SetSyncVarDirtyBit(256UL);
             _minDistance = value;
         }
     }
@@ -122,26 +60,22 @@ public class SpeakerToyComponent : BehaviourComponent
         get => _maxDistance;
         set
         {
-            SetSyncVarDirtyBit(512);
+            SetSyncVarDirtyBit(512UL);
             _maxDistance = value;
         }
     }
 
     public SpeakerToyComponent(NetworkObject networkObject) : base(networkObject)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WriteVector3(_position);
-            writer.WriteQuaternion(_rotation);
-            writer.WriteVector3(_scale);
-            writer.WriteByte(_movementSmoothing);
-            writer.WriteBool(_isStatic);
             writer.WriteByte(_controllerId);
             writer.WriteBool(_isSpatial);
             writer.WriteFloat(_volume);
@@ -150,54 +84,33 @@ public class SpeakerToyComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WriteVector3(_position);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
 
-        if ((SyncVarDirtyBits & 2U) != 0)
-        {
-            writer.WriteQuaternion(_rotation);
-        }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
-        {
-            writer.WriteVector3(_scale);
-        }
-
-        if ((SyncVarDirtyBits & 8U) != 0)
-        {
-            writer.WriteByte(_movementSmoothing);
-        }
-
-        if ((SyncVarDirtyBits & 16U) != 0)
-        {
-            writer.WriteBool(_isStatic);
-        }
-
-        if ((SyncVarDirtyBits & 32U) != 0)
+        if ((SyncVarDirtyBits & 32UL) != 0UL)
         {
             writer.WriteByte(_controllerId);
         }
 
-        if ((SyncVarDirtyBits & 64U) != 0)
+        if ((SyncVarDirtyBits & 64UL) != 0UL)
         {
             writer.WriteBool(_isSpatial);
         }
 
-        if ((SyncVarDirtyBits & 128U) != 0)
+        if ((SyncVarDirtyBits & 128UL) != 0UL)
         {
             writer.WriteFloat(_volume);
         }
 
-        if ((SyncVarDirtyBits & 256U) != 0)
+        if ((SyncVarDirtyBits & 256UL) != 0UL)
         {
             writer.WriteFloat(_minDistance);
         }
 
-        if ((SyncVarDirtyBits & 512U) != 0)
+        if ((SyncVarDirtyBits & 512UL) != 0UL)
         {
             writer.WriteFloat(_maxDistance);
         }
     }
+
 }

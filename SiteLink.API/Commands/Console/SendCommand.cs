@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using SiteLink.API.Networking.Connections;
 
 namespace SiteLink.API.Commands.Console;
 
@@ -29,24 +25,30 @@ public class SendCommand
         {
             case true when args[0].ToLower() == "all":
                 int sent = 0;
-                foreach (Client client in Listener.ClientByUserId.Values)
+                foreach (RemoteConnection client in RemoteConnection.ConnectionByUserId.Values)
                 {
-                    if (client.Server == server)
+                    if (client.Session.Server == server)
                         continue;
 
-                    client.Connect(server);
+                    client.Execute(() =>
+                    {
+                        client.Connect(server, true);
+                    });
                 }
 
                 SiteLinkLogger.Info($"Sent (f=green){sent}(f=white) clients to server (f=green){server.Name}(f=white)", "send");
                 break;
             case true when args[0].ToLower().Contains('@'):
-                if (!Client.TryGet(args[0], out Client targetPlayer))
+                if (!RemoteConnection.TryGet(args[0], out RemoteConnection targetPlayer))
                 {
                     SiteLinkLogger.Info($"Client with userid {args[0]} does not exist!", "send");
                     break;
                 }
 
-                targetPlayer.Connect(server);
+                targetPlayer.Execute(() =>
+                {
+                    targetPlayer.Connect(server, true);
+                });
                 break;
             case true when Server.TryGetByName(args[0], out Server serverFrom) && server != null:
                 if (server == serverFrom)
@@ -56,10 +58,12 @@ public class SendCommand
 
                 int sentPopulation = 0;
 
-                foreach (Client player in serverFrom.Clients)
+                foreach (Session session in serverFrom.GetSessionsSnapshot())
                 {
-                    player.Connect(server);
-                    sentPopulation++;
+                    session?.Connection.Execute(() =>
+                    {
+                        session?.Connection.Connect(server, true);
+                    });
                 }
 
                 SiteLinkLogger.Info($"Sent (f=green){sentPopulation}(f=white) clients from {serverFrom.Name} to clients (f=green){server.Name}(f=white)", "send");

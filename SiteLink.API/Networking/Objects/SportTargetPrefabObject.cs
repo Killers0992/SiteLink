@@ -15,7 +15,7 @@ public class SportTargetPrefabObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public ShootingTargetComponent ShootingTarget { get; }
 
-    public SportTargetPrefabObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public SportTargetPrefabObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

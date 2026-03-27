@@ -4,9 +4,8 @@ using RelativePositioning;
 
 namespace SiteLink.API.Networking.Components;
 
-public class Scp939AmnesticCloudInstanceComponent : BehaviourComponent
+public class Scp939AmnesticCloudInstanceComponent : TemporaryHazardComponent
 {
-
     private byte _syncHoldTime;
 
     private byte _syncState;
@@ -20,7 +19,7 @@ public class Scp939AmnesticCloudInstanceComponent : BehaviourComponent
         get => _syncHoldTime;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _syncHoldTime = value;
         }
     }
@@ -30,7 +29,7 @@ public class Scp939AmnesticCloudInstanceComponent : BehaviourComponent
         get => _syncState;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _syncState = value;
         }
     }
@@ -40,7 +39,7 @@ public class Scp939AmnesticCloudInstanceComponent : BehaviourComponent
         get => _syncOwner;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _syncOwner = value;
         }
     }
@@ -50,19 +49,20 @@ public class Scp939AmnesticCloudInstanceComponent : BehaviourComponent
         get => _syncPos;
         set
         {
-            SetSyncVarDirtyBit(8);
+            SetSyncVarDirtyBit(8UL);
             _syncPos = value;
         }
     }
 
     public Scp939AmnesticCloudInstanceComponent(NetworkObject networkObject) : base(networkObject)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteByte(_syncHoldTime);
@@ -72,24 +72,28 @@ public class Scp939AmnesticCloudInstanceComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteByte(_syncHoldTime);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteByte(_syncState);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteUInt(_syncOwner);
         }
 
-        if ((SyncVarDirtyBits & 8U) != 0)
+        if ((SyncVarDirtyBits & 8UL) != 0UL)
         {
             writer.WriteRelativePosition(_syncPos);
         }
     }
+
 }

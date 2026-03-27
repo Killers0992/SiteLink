@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class AlphaWarheadControllerComponent : BehaviourComponent
 {
-
     private AlphaWarheadSyncInfo _info;
 
     private double _cooldownEndTime;
@@ -15,7 +14,7 @@ public class AlphaWarheadControllerComponent : BehaviourComponent
         get => _info;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _info = value;
         }
     }
@@ -25,19 +24,24 @@ public class AlphaWarheadControllerComponent : BehaviourComponent
         get => _cooldownEndTime;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _cooldownEndTime = value;
         }
     }
 
-    public AlphaWarheadControllerComponent(NetworkObject networkObject) : base(networkObject)
+    public AlphaWarheadControllerComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public AlphaWarheadControllerComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteAlphaWarheadSyncInfo(_info);
@@ -45,14 +49,18 @@ public class AlphaWarheadControllerComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteAlphaWarheadSyncInfo(_info);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteDouble(_cooldownEndTime);
         }
     }
+
 }

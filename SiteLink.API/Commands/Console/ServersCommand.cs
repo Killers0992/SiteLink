@@ -12,7 +12,7 @@ public class ServersCommand
 
         foreach (var server in Server.List)
         {
-            sb.AppendLine($" - (f=cyan){server.Name}(f=white) [ (f=green){server.Clients.Count}(f=white) ] ((f=darkcyan){server}(f=white))");
+            sb.AppendLine($" - (f=cyan){server.Name}(f=white) [ (f=green){server.SessionsCount}(f=white) ] ((f=darkcyan){server}(f=white))");
         }
 
         SiteLinkLogger.Info(sb.ToString(), "servers");

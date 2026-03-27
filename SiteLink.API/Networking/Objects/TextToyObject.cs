@@ -15,7 +15,7 @@ public class TextToyObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public TextToyComponent TextToy { get; }
 
-    public TextToyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public TextToyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

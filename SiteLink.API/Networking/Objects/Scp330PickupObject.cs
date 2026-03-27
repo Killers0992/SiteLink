@@ -15,7 +15,7 @@ public class Scp330PickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public Scp330PickupComponent Scp330Pickup { get; }
 
-    public Scp330PickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public Scp330PickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

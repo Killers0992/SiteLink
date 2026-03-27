@@ -15,7 +15,7 @@ public class InvisibleInteractableToyObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public InvisibleInteractableToyComponent InvisibleInteractableToy { get; }
 
-    public InvisibleInteractableToyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public InvisibleInteractableToyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

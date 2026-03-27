@@ -1,40 +1,24 @@
-using Mirror;
-using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class PedestalScpLockerComponent : BehaviourComponent
+public class PedestalScpLockerComponent : LockerComponent
 {
-
-    private ushort _openedChambers;
-
-    public ushort OpenedChambers
-    {
-        get => _openedChambers;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _openedChambers = value;
-        }
-    }
-
     public PedestalScpLockerComponent(NetworkObject networkObject) : base(networkObject)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WriteUShort(_openedChambers);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WriteUShort(_openedChambers);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
+
     }
+
 }

@@ -3,9 +3,8 @@ using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class WallableSmallNodeRoomConnectorComponent : BehaviourComponent
+public class WallableSmallNodeRoomConnectorComponent : SpawnableRoomConnectorComponent
 {
-
     private byte _syncBitmask;
 
     public byte SyncBitmask
@@ -13,28 +12,33 @@ public class WallableSmallNodeRoomConnectorComponent : BehaviourComponent
         get => _syncBitmask;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _syncBitmask = value;
         }
     }
 
     public WallableSmallNodeRoomConnectorComponent(NetworkObject networkObject) : base(networkObject)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteByte(_syncBitmask);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteByte(_syncBitmask);
         }
     }
+
 }

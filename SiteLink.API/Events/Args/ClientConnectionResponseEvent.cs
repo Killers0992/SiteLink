@@ -1,15 +1,17 @@
-﻿namespace SiteLink.API.Events.Args;
+﻿using SiteLink.API.Networking.Connections;
+
+namespace SiteLink.API.Events.Args;
 
 public class ClientConnectionResponseEvent : BaseCancellableEvent
 {
-    public ClientConnectionResponseEvent(Client client, Server server, IDisconnectResponse response)
+    public ClientConnectionResponseEvent(RemoteConnection connection, Server server, IDisconnectResponse response)
     {
-        Client = client;
+        Connection = connection;
         Server = server;
         Response = response;
     }
 
-    public Client Client { get; }
+    public RemoteConnection Connection { get; }
 
     public Server Server { get; }
 

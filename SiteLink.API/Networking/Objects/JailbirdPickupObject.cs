@@ -2,20 +2,20 @@
 namespace SiteLink.API.Networking.Objects;
 
 //
-// Name: JailbirdPickup Halloween
+// Name: JailbirdPickup
 // NetworkID: 0
-// AssetID: 3262457219
+// AssetID: 2915316078
 // SceneID: 0
-// Path: JailbirdPickup Halloween
+// Path: JailbirdPickup
 //
-public class JailbirdPickupHalloweenObject : NetworkObject
+public class JailbirdPickupObject : NetworkObject
 {
-    public const uint ObjectAssetId = 3262457219;
+    public const uint ObjectAssetId = 2915316078;
 
     public override uint AssetId { get; } = ObjectAssetId;
     public JailbirdPickupComponent JailbirdPickup { get; }
 
-    public JailbirdPickupHalloweenObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public JailbirdPickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

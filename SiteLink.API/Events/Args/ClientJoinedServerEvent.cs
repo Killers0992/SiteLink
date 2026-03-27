@@ -1,13 +1,13 @@
 ﻿namespace SiteLink.API.Events.Args;
 
-public class ClientJoinedServerEvent : BaseEvent
+public class SessionJoinedServerEvent : BaseEvent
 {
-    public ClientJoinedServerEvent(Client client, Server server)
+    public SessionJoinedServerEvent(Session session, Server server)
     {
-        Client = client;
+        Session = session;
         Server = server;
     }
 
-    public Client Client { get; }
+    public Session Session { get; }
     public Server Server { get; }
 }

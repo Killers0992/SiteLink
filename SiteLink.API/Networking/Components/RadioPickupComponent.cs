@@ -1,34 +1,20 @@
-using InventorySystem.Items.Pickups;
 using Mirror;
 using System;
 
 namespace SiteLink.API.Networking.Components;
 
-public class RadioPickupComponent : BehaviourComponent
+public class RadioPickupComponent : CollisionDetectionPickupComponent
 {
-
-    private PickupSyncInfo _info;
-
     private bool _savedEnabled;
 
     private byte _savedRange;
-
-    public PickupSyncInfo Info
-    {
-        get => _info;
-        set
-        {
-            SetSyncVarDirtyBit(1);
-            _info = value;
-        }
-    }
 
     public bool SavedEnabled
     {
         get => _savedEnabled;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _savedEnabled = value;
         }
     }
@@ -38,40 +24,39 @@ public class RadioPickupComponent : BehaviourComponent
         get => _savedRange;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _savedRange = value;
         }
     }
 
     public RadioPickupComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<byte>())
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
-            writer.WritePickupSyncInfo(_info);
             writer.WriteBool(_savedEnabled);
             writer.WriteByte(_savedRange);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
-        {
-            writer.WritePickupSyncInfo(_info);
-        }
+        writer.WriteULong(SyncVarDirtyBits);
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteBool(_savedEnabled);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteByte(_savedRange);
         }
     }
+
 }

@@ -1,14 +1,12 @@
-﻿using GameCore;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Org.BouncyCastle.Crypto;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace SiteLink.API.Handlers;
 
 /// <summary>
 /// API-style handler for managing SCP:SL server list communication.
 /// </summary>
-public class ScpServerListHandler
+public class ScpServerListHandler : IDisposable
 {
     public const string CentralSubdomain = "api";
 
@@ -23,7 +21,7 @@ public class ScpServerListHandler
     public static string AuthenticatorUrl => $"{MasterUrl}{ApiVersion}/authenticator.php";
     public static string ContactAddressUrl => $"{MasterUrl}{ApiVersion}/contactaddress.php";
 
-    private readonly HttpClient _client;
+    private readonly SiteLinkApiClient _apiClient;
     private readonly CancellationToken _cancellationToken;
 
     public static string Password { get; private set; }
@@ -43,9 +41,7 @@ public class ScpServerListHandler
     {
         _cancellationToken = cancellationToken;
 
-        _client = new HttpClient();
-        _client.DefaultRequestHeaders.Add("User-Agent", "SCP SL");
-        _client.DefaultRequestHeaders.Add("Game-Version", SiteLinkAPI.GameVersionText);
+        _apiClient = new SiteLinkApiClient("SCP SL", SiteLinkAPI.GameVersionText);
     }
 
     public async Task InitializeAsync()
@@ -61,9 +57,9 @@ public class ScpServerListHandler
         _scheduleTokenRefresh = false;
 
         if (!File.Exists("verkey.txt"))
-            await File.WriteAllTextAsync("verkey.txt", "none", _cancellationToken);
+            File.WriteAllText("verkey.txt", "none");
 
-        _verKey ??= await File.ReadAllTextAsync("verkey.txt", _cancellationToken);
+        _verKey ??= File.ReadAllText("verkey.txt");
 
         if (string.IsNullOrEmpty(_verKey))
             return;
@@ -114,10 +110,7 @@ public class ScpServerListHandler
     {
         try
         {
-            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersion.Major}", _cancellationToken);
-            string responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
-
-            PublicKey publicKeyResponse = JsonConvert.DeserializeObject<PublicKey>(responseText);
+            PublicKey publicKeyResponse = await _apiClient.GetPublicKeyAsync(SiteLinkAPI.GameVersion.Major, _cancellationToken);
 
             if (!ECDSA.Verify(publicKeyResponse.Key, publicKeyResponse.Signature, ScpCentralServer.MasterKey))
             {
@@ -136,7 +129,7 @@ public class ScpServerListHandler
         }
         catch (Exception ex)
         {
-
+            SiteLinkLogger.Error(ex, nameof(ScpServerListHandler));
         }
     }
 
@@ -144,10 +137,7 @@ public class ScpServerListHandler
     {
         try
         {
-            HttpResponseMessage response = await _client.GetAsync($"{PublicKeyUrl}?major={SiteLinkAPI.GameVersion.Major}", _cancellationToken);
-            string responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
-
-            PublicKey publicKeyResponse = JsonConvert.DeserializeObject<PublicKey>(responseText);
+            PublicKey publicKeyResponse = await _apiClient.GetPublicKeyAsync(SiteLinkAPI.GameVersion.Major, _cancellationToken);
 
             if (!ECDSA.Verify(publicKeyResponse.Key, publicKeyResponse.Signature, ScpCentralServer.MasterKey))
             {
@@ -184,7 +174,7 @@ public class ScpServerListHandler
         try
         {
             _verKey = token;
-            await File.WriteAllTextAsync("verkey.txt", token, _cancellationToken);
+            File.WriteAllText("verkey.txt", token);
 
             SiteLinkLogger.Info("Token saved", "ScpServerList");
 
@@ -243,7 +233,7 @@ public class ScpServerListHandler
 
             listener.ServerListUpdate = listener.ForceServerListUpdate || listener.ServerListCycle == 10;
 
-            string playersStr = $"{listener.ConnectedClients.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
+            string playersStr = $"{listener.Connections.Values.Count}/{SiteLinkSettings.Singleton.PlayerLimit}";
 
             if (!string.IsNullOrEmpty(listener.Settings.ServerList.TakePlayerCountFromServer))
             {
@@ -255,7 +245,7 @@ public class ScpServerListHandler
                 }
                 else
                 {
-                    playersStr = $"{targetServer.ClientsCount}/{targetServer.MaxClientsCount}";
+                    playersStr = $"{targetServer.SessionsCount}/{targetServer.MaxSessions}";
                 }
             }
 
@@ -284,12 +274,9 @@ public class ScpServerListHandler
 
     private async Task<bool> SendDataAsync(Listener server, Dictionary<string, string> data)
     {
-        var content = new FormUrlEncodedContent(data);
-
         try
         {
-            using var response = await server.Http.PostAsync(AuthenticatorUrl, content, _cancellationToken);
-            var responseText = await response.Content.ReadAsStringAsync(_cancellationToken);
+            string responseText = await _apiClient.PostServerListUpdateAsync(data, _cancellationToken);
 
             return responseText.StartsWith("{\"")
                 ? await ProcessResponseAsync(server, responseText)
@@ -347,7 +334,7 @@ public class ScpServerListHandler
             {
                 var text = response[(response.IndexOf(':') + 1)..].Replace(":", string.Empty);
                 _verKey = text;
-                await File.WriteAllTextAsync("verkey.txt", text, _cancellationToken);
+                File.WriteAllText("verkey.txt", text);
 
                 SiteLinkLogger.Info("Password saved");
                 server.ForceServerListUpdate = true;
@@ -419,8 +406,7 @@ public class ScpServerListHandler
 
         try
         {
-            using var response = await listener.Http.PostAsync(ContactAddressUrl, new FormUrlEncodedContent(data), _cancellationToken);
-            string text = await response.Content.ReadAsStringAsync(_cancellationToken);
+            string text = await _apiClient.PostContactAddressAsync(data, _cancellationToken);
         }
         catch (Exception ex)
         {
@@ -457,8 +443,10 @@ public class ScpServerListHandler
 
     public static async Task ExecuteCentralCommandAsync(Listener listener, string cmd, params string[] cmdArgs)
     {
-        if (listener?.Http == null)
+        if (listener == null)
             throw new ArgumentNullException(nameof(listener), "Listener is null or not initialized.");
+
+        using var apiClient = new SiteLinkApiClient("SCP SL", SiteLinkAPI.GameVersionText);
 
         Dictionary<string, string> data = new Dictionary<string, string>
         {
@@ -471,12 +459,15 @@ public class ScpServerListHandler
         if (!string.IsNullOrEmpty(Password))
             data.Add("passcode", Password);
 
-        using FormUrlEncodedContent content = new FormUrlEncodedContent(data);
-        using HttpResponseMessage response = await listener.Http.PostAsync($"{MasterUrl}centralcommands/{cmd}.php", content);
-        string responseText = await response.Content.ReadAsStringAsync();
+        string responseText = await apiClient.PostCentralCommandAsync(cmd, data);
 
         SiteLinkLogger.Info($"[(f=green){cmd}(f=white)] {responseText}", $"central");
     }
 
     public static void ExecuteCentralCommand(Listener listener, string cmd, params string[] cmdArgs) => ExecuteCentralCommandAsync(listener, cmd, cmdArgs).GetAwaiter().GetResult();
+
+    public void Dispose()
+    {
+        _apiClient?.Dispose();
+    }
 }

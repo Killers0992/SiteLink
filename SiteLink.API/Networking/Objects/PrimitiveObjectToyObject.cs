@@ -15,7 +15,7 @@ public class PrimitiveObjectToyObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public PrimitiveObjectToyComponent PrimitiveObjectToy { get; }
 
-    public PrimitiveObjectToyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public PrimitiveObjectToyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

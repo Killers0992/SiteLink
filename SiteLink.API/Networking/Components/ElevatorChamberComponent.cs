@@ -6,7 +6,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class ElevatorChamberComponent : BehaviourComponent
 {
-
     private ElevatorGroup _assignedGroup;
 
     private byte _syncDestinationLevel;
@@ -18,7 +17,7 @@ public class ElevatorChamberComponent : BehaviourComponent
         get => _assignedGroup;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _assignedGroup = value;
         }
     }
@@ -28,7 +27,7 @@ public class ElevatorChamberComponent : BehaviourComponent
         get => _syncDestinationLevel;
         set
         {
-            SetSyncVarDirtyBit(2);
+            SetSyncVarDirtyBit(2UL);
             _syncDestinationLevel = value;
         }
     }
@@ -38,19 +37,24 @@ public class ElevatorChamberComponent : BehaviourComponent
         get => _waypointId;
         set
         {
-            SetSyncVarDirtyBit(4);
+            SetSyncVarDirtyBit(4UL);
             _waypointId = value;
         }
     }
 
-    public ElevatorChamberComponent(NetworkObject networkObject) : base(networkObject)
+    public ElevatorChamberComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public ElevatorChamberComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.Write(_assignedGroup);
@@ -59,19 +63,23 @@ public class ElevatorChamberComponent : BehaviourComponent
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.Write(_assignedGroup);
         }
 
-        if ((SyncVarDirtyBits & 2U) != 0)
+        if ((SyncVarDirtyBits & 2UL) != 0UL)
         {
             writer.WriteByte(_syncDestinationLevel);
         }
 
-        if ((SyncVarDirtyBits & 4U) != 0)
+        if ((SyncVarDirtyBits & 4UL) != 0UL)
         {
             writer.WriteByte(_waypointId);
         }
     }
+
 }

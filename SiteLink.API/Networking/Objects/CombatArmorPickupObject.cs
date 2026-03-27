@@ -15,7 +15,7 @@ public class CombatArmorPickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public BodyArmorPickupComponent BodyArmorPickup { get; }
 
-    public CombatArmorPickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public CombatArmorPickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

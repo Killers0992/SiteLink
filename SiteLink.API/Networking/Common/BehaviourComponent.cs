@@ -7,27 +7,30 @@ public class BehaviourComponent
 
     public NetworkObject Object { get; }
 
-    public SyncObject[] SyncObjects { get; }
+    public SyncedNetworkProperty[] SyncObjects { get; }
 
 
-    public Action<NetworkWriter, bool> OnBeforeSerialize;
-    public Action<NetworkWriter, bool> OnAfterSerialize;
+    //public Action<NetworkWriter, bool> OnBeforeSerialize;
+    //public Action<NetworkWriter, bool> OnAfterSerialize;
 
-    public Action<NetworkWriter, bool> OnSerializeSyncVars;
+    //public Action<NetworkReader, long, bool> OnDeserializeSyncVars;
 
-    public Action<NetworkReader, long, bool> OnDeserializeSyncVars;
-
-    public BehaviourComponent(NetworkObject networkObject, params SyncObject[] objects)
+    public BehaviourComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects)
     {
         Object = networkObject;
         SyncObjects = objects;
     }
 
-    public virtual void OnReceiveCommand(ushort functionHash, ArraySegment<byte> payload = default) { }
+    public virtual bool OnReceiveCommand(ushort functionHash, NetworkReader reader) => true;
 
     public void SetSyncVarDirtyBit(ulong dirtyBit)
     {
         SyncVarDirtyBits |= dirtyBit;
+    }
+
+    public void SetSyncObjectDirtyBit(ulong dirtyBit)
+    {
+        SyncObjectsDirtyBits |= dirtyBit;
     }
 
     public void ClearAllDirtyBits()
@@ -92,16 +95,6 @@ public class BehaviourComponent
         return result;
     }
 
-    void OnSerialize(NetworkWriter writer, bool initialState)
-    {
-        OnBeforeSerialize?.Invoke(writer, initialState);
-
-        SerializeSyncObjects(writer, initialState);
-        SerializeSyncVars(writer, initialState);
-
-        OnAfterSerialize?.Invoke(writer, initialState);
-    }
-
     void OnDeserialize(NetworkReader reader, bool initialState)
     {
         DeserializeSyncObjects(reader, initialState);
@@ -116,12 +109,15 @@ public class BehaviourComponent
             SerializeObjectsDelta(writer);
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool initialState)
+    public virtual void OnSerialize(NetworkWriter writer, bool initialState)
     {
-        if (!initialState)
-            writer.WriteULong(SyncVarDirtyBits);
+        SerializeSyncObjects(writer, initialState);
+        SerializeSyncVars(writer, initialState);
+    }
 
-        OnSerializeSyncVars?.Invoke(writer, initialState);
+    protected virtual void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+
     }
 
     void SerializeObjectsAll(NetworkWriter writer)
@@ -137,7 +133,7 @@ public class BehaviourComponent
         writer.WriteULong(SyncObjectsDirtyBits);
         for (int i = 0; i < SyncObjects.Length; i++)
         {
-            SyncObject syncObject = SyncObjects[i];
+            SyncedNetworkProperty syncObject = SyncObjects[i];
 
             if ((SyncObjectsDirtyBits & 1UL << i) != 0UL)
                 syncObject.OnSerializeDelta(writer);
@@ -159,14 +155,14 @@ public class BehaviourComponent
         if (!initialState)
             mask = (long)reader.ReadULong();
 
-        OnDeserializeSyncVars?.Invoke(reader, mask, initialState);
+        //OnDeserializeSyncVars?.Invoke(reader, mask, initialState);
     }
 
     void DeserializeObjectsAll(NetworkReader reader)
     {
         for (int i = 0; i < SyncObjects.Length; i++)
         {
-            SyncObject syncObject = SyncObjects[i];
+            SyncedNetworkProperty syncObject = SyncObjects[i];
             syncObject.OnDeserializeAll(reader);
         }
     }
@@ -176,7 +172,7 @@ public class BehaviourComponent
         ulong dirty = reader.ReadULong();
         for (int i = 0; i < SyncObjects.Length; i++)
         {
-            SyncObject syncObject = SyncObjects[i];
+            SyncedNetworkProperty syncObject = SyncObjects[i];
             if ((dirty & 1UL << i) != 0)
                 syncObject.OnDeserializeDelta(reader);
         }
@@ -189,4 +185,3 @@ public class BehaviourComponent
         return (int)(cleared | safety);
     }
 }
-

@@ -15,7 +15,7 @@ public class CapybaraToyObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public CapybaraToyComponent CapybaraToy { get; }
 
-    public CapybaraToyObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public CapybaraToyObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

@@ -9,19 +9,19 @@ public class ReadWriterInitializer
     {
         try
         {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 if (assembly.IsDynamic)
                     continue;
 
-                foreach (var type in assembly.GetTypes())
+                foreach (Type type in assembly.GetTypes())
                 {
                     var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
                         .Where(m =>
                             m.Name == "InitReadWriters" &&
                             m.IsDefined(typeof(RuntimeInitializeOnLoadMethodAttribute), inherit: false));
 
-                    foreach (var method in methods)
+                    foreach (MethodInfo method in methods)
                     {
                         try
                         {

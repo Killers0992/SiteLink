@@ -16,7 +16,7 @@ public class ExperimentalWeaponLockerObject : NetworkObject
     public ExperimentalWeaponLockerComponent ExperimentalWeaponLocker { get; }
     public StructurePositionSyncComponent StructurePositionSync { get; }
 
-    public ExperimentalWeaponLockerObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public ExperimentalWeaponLockerObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

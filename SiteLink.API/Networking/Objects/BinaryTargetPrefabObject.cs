@@ -15,7 +15,7 @@ public class BinaryTargetPrefabObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public ShootingTargetComponent ShootingTarget { get; }
 
-    public BinaryTargetPrefabObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public BinaryTargetPrefabObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

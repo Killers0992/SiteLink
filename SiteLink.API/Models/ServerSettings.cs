@@ -50,4 +50,10 @@ public class ServerSettings
     /// </summary>
     [Description("List of fallback servers used when this server is unavailable.")]
     public string[] FallbackServers { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets or sets the configuration settings for the bridge.
+    /// </summary>
+    [Description("If server uses Bridge plugin then configure it below. ( this allows you to communicate between labapi plugins <-> sitelink plugins )")]
+    public BridgeSettings Bridge { get; set; } = new BridgeSettings();
 }

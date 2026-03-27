@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class WorkstationControllerComponent : BehaviourComponent
 {
-
     private byte _status;
 
     public byte Status
@@ -13,28 +12,37 @@ public class WorkstationControllerComponent : BehaviourComponent
         get => _status;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _status = value;
         }
     }
 
-    public WorkstationControllerComponent(NetworkObject networkObject) : base(networkObject)
+    public WorkstationControllerComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public WorkstationControllerComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteByte(_status);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteByte(_status);
         }
     }
+
 }

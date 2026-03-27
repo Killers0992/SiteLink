@@ -1,13 +1,13 @@
 ﻿namespace SiteLink.API.Events.Args;
 
-public class ClientUnloadedWorldEvent : BaseEvent
+public class SessionUnloadedWorldEvent : BaseEvent
 {
-    public ClientUnloadedWorldEvent(Client client, World world)
+    public SessionUnloadedWorldEvent(Session session, World world)
     {
-        Client = client;
+        Session = session;
         World = world;
     }
 
-    public Client Client { get; }
+    public Session Session { get; }
     public World World { get; }
 }

@@ -11,7 +11,7 @@ public class SpawnTextCommand
             return;
         }
 
-        string userId = args[0];
+        /*string userId = args[0];
 
         if (!Client.TryGet(userId, out Client client))
         {
@@ -31,6 +31,6 @@ public class SpawnTextCommand
 
         text.SpawnWithPayload(client);
 
-        SiteLinkLogger.Info($"Spawned text for (f=green){userId}(f=white) with message (f=green){message}(f=white)", "spawntext");
+        SiteLinkLogger.Info($"Spawned text for (f=green){userId}(f=white) with message (f=green){message}(f=white)", "spawntext");*/
     }
 }

@@ -5,7 +5,6 @@ namespace SiteLink.API.Networking.Components;
 
 public class QueryProcessorComponent : BehaviourComponent
 {
-
     private bool _overridePasswordEnabled;
 
     public bool OverridePasswordEnabled
@@ -13,28 +12,37 @@ public class QueryProcessorComponent : BehaviourComponent
         get => _overridePasswordEnabled;
         set
         {
-            SetSyncVarDirtyBit(1);
+            SetSyncVarDirtyBit(1UL);
             _overridePasswordEnabled = value;
         }
     }
 
-    public QueryProcessorComponent(NetworkObject networkObject) : base(networkObject)
+    public QueryProcessorComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
-        //
-        this.OnSerializeSyncVars += SerializeSyncVars;
     }
 
-    void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    public QueryProcessorComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
+        //
+    }
+
+    protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
+    {
+        base.SerializeSyncVars(writer, forceAll);
+
         if (forceAll)
         {
             writer.WriteBool(_overridePasswordEnabled);
             return;
         }
 
-        if ((SyncVarDirtyBits & 1U) != 0)
+        writer.WriteULong(SyncVarDirtyBits);
+
+
+        if ((SyncVarDirtyBits & 1UL) != 0UL)
         {
             writer.WriteBool(_overridePasswordEnabled);
         }
     }
+
 }

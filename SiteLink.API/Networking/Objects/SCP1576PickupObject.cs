@@ -15,7 +15,7 @@ public class SCP1576PickupObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public Scp1576PickupComponent Scp1576Pickup { get; }
 
-    public SCP1576PickupObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public SCP1576PickupObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

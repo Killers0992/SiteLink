@@ -1,4 +1,6 @@
-﻿namespace SiteLink.API.Commands;
+﻿using SiteLink.API.Networking.Connections;
+
+namespace SiteLink.API.Commands;
 
 public class PositionCommand
 {
@@ -13,12 +15,12 @@ public class PositionCommand
 
         string userId = args[0];
 
-        if (!Client.TryGet(userId, out Client client))
+        if (!RemoteConnection.TryGet(userId, out RemoteConnection client))
         {
             SiteLinkLogger.Info($"Not found player with userid (f=green){userId}(f=white)", "position");
             return;
         }
 
-        SiteLinkLogger.Info($"Current position for (f=green){userId}(f=white), pos (f=cyan){client.Position}(f=white), rot horizontal (f=cyan){client.HorizontalRotation}(f=white) vertical (f=cyan){client.VerticalRotation}(f=white)", "position");
+        SiteLinkLogger.Info($"Current position for (f=green){userId}(f=white), pos (f=cyan){client.Session.Position}(f=white), rot horizontal (f=cyan){client.Session.HorizontalRotation}(f=white) vertical (f=cyan){client.Session.VerticalRotation}(f=white)", "position");
     }
 }

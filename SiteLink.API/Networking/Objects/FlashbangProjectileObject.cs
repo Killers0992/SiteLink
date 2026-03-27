@@ -15,7 +15,7 @@ public class FlashbangProjectileObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public FlashbangGrenadeComponent FlashbangGrenade { get; }
 
-    public FlashbangProjectileObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public FlashbangProjectileObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

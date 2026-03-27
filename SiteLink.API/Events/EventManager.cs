@@ -41,12 +41,12 @@ public class ClientEvents
     public event CustomEventHandler<ClientConnectionResponseEvent> ConnectionResponse;
     public void InvokeConnectionResponse(ClientConnectionResponseEvent ev) => ConnectionResponse?.InvokeWithExceptionHandler(ev);
 
-    public event CustomEventHandler<ClientJoinedServerEvent> JoinedServer;
-    public void InvokeJoinedServer(ClientJoinedServerEvent ev) => JoinedServer?.InvokeWithExceptionHandler(ev);
+    public event CustomEventHandler<SessionJoinedServerEvent> JoinedServer;
+    public void InvokeJoinedServer(SessionJoinedServerEvent ev) => JoinedServer?.InvokeWithExceptionHandler(ev);
 
-    public event CustomEventHandler<ClientLoadedWorldEvent> LoadedWorld;
-    public void InvokeLoadedWorld(ClientLoadedWorldEvent ev) => LoadedWorld?.InvokeWithExceptionHandler(ev);
+    public event CustomEventHandler<SessionLoadedWorldEvent> LoadedWorld;
+    public void InvokeLoadedWorld(SessionLoadedWorldEvent ev) => LoadedWorld?.InvokeWithExceptionHandler(ev);
 
-    public event CustomEventHandler<ClientUnloadedWorldEvent> UnloadedWorld;
-    public void InvokeUnloadedWorld(ClientUnloadedWorldEvent ev) => UnloadedWorld?.InvokeWithExceptionHandler(ev);
+    public event CustomEventHandler<SessionUnloadedWorldEvent> UnloadedWorld;
+    public void InvokeUnloadedWorld(SessionUnloadedWorldEvent ev) => UnloadedWorld?.InvokeWithExceptionHandler(ev);
 }

@@ -16,7 +16,7 @@ public class Scp1576PedestalStructureVariantObject : NetworkObject
     public PedestalScpLockerComponent PedestalScpLocker { get; }
     public StructurePositionSyncComponent StructurePositionSync { get; }
 
-    public Scp1576PedestalStructureVariantObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public Scp1576PedestalStructureVariantObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

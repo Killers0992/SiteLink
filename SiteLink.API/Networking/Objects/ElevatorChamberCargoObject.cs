@@ -16,7 +16,7 @@ public class ElevatorChamberCargoObject : NetworkObject
     public ElevatorChamberComponent ElevatorChamber { get; }
     public ElevatorSquishComponent ElevatorSquish { get; }
 
-    public ElevatorChamberCargoObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public ElevatorChamberCargoObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[2];

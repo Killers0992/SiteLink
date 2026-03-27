@@ -15,7 +15,7 @@ public class AmnesticCloudHazardObject : NetworkObject
     public override uint AssetId { get; } = ObjectAssetId;
     public Scp939AmnesticCloudInstanceComponent Scp939AmnesticCloudInstance { get; }
 
-    public AmnesticCloudHazardObject(World world, Client owner = null, uint networkId = 0) : base(world, owner, networkId)
+    public AmnesticCloudHazardObject(World world, Session owner = null, uint networkId = 0) : base(world, owner, networkId)
     {
         //
         Behaviours = new BehaviourComponent[1];

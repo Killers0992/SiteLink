@@ -1,13 +1,20 @@
 ﻿using SiteLink.API.Core;
 using SiteLink.API.Models;
+using SiteLink.API.Metrics;
 using SiteLink.Servers;
+using System.Diagnostics;
 
 namespace SiteLink.Services;
 
 public class ListenersService : BackgroundService
 {
+    public static ListenersService Instance { get; private set; }
+
+    public ServiceStats Stats { get; } = new ServiceStats("ListenersService");
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        Instance = this;
         Listener.Token = stoppingToken;
 
         try
@@ -19,7 +26,7 @@ public class ListenersService : BackgroundService
 
             foreach (ListenerSettings settings in SiteLinkSettings.Singleton.Listeners)
             {
-                Listener.Register(new Listener(settings.Name));
+                new Listener(settings.Name);
             }
         }
         catch(Exception ex)
@@ -35,6 +42,7 @@ public class ListenersService : BackgroundService
     {
         while (!token.IsCancellationRequested)
         {
+            var stopwatch = Stopwatch.StartNew();
 
             try
             {
@@ -43,6 +51,7 @@ public class ListenersService : BackgroundService
                     try
                     {
                         server.OnUpdate();
+                        Stats.RecordProcessedItem();
                     }
                     catch (Exception ex)
                     {
@@ -55,7 +64,9 @@ public class ListenersService : BackgroundService
                 Console.WriteLine(ex);
             }
 
-            
+            stopwatch.Stop();
+            Stats.RecordIteration(stopwatch.Elapsed);
+
             await Task.Delay(10, token);
         }
     }
