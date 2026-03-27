@@ -104,7 +104,7 @@ public class SiteLinkApiClient : IDisposable
         var response = await _client.ExecuteAsync(request, ct).ConfigureAwait(false);
 
         if (!response.IsSuccessful || response.Content is null)
-            throw new InvalidOperationException($"POST request failed: HTTP {(int)response.StatusCode}");
+            throw new InvalidOperationException($"POST request failed: HTTP {(int)response.StatusCode} {request}");
 
         return response.Content;
     }

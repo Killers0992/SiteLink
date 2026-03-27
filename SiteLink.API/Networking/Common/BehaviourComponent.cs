@@ -10,10 +10,10 @@ public class BehaviourComponent
     public SyncedNetworkProperty[] SyncObjects { get; }
 
 
-    public Action<NetworkWriter, bool> OnBeforeSerialize;
-    public Action<NetworkWriter, bool> OnAfterSerialize;
+    //public Action<NetworkWriter, bool> OnBeforeSerialize;
+    //public Action<NetworkWriter, bool> OnAfterSerialize;
 
-    public Action<NetworkReader, long, bool> OnDeserializeSyncVars;
+    //public Action<NetworkReader, long, bool> OnDeserializeSyncVars;
 
     public BehaviourComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects)
     {
@@ -111,12 +111,8 @@ public class BehaviourComponent
 
     public virtual void OnSerialize(NetworkWriter writer, bool initialState)
     {
-        OnBeforeSerialize?.Invoke(writer, initialState);
-
         SerializeSyncObjects(writer, initialState);
         SerializeSyncVars(writer, initialState);
-
-        OnAfterSerialize?.Invoke(writer, initialState);
     }
 
     protected virtual void SerializeSyncVars(NetworkWriter writer, bool forceAll)
@@ -159,7 +155,7 @@ public class BehaviourComponent
         if (!initialState)
             mask = (long)reader.ReadULong();
 
-        OnDeserializeSyncVars?.Invoke(reader, mask, initialState);
+        //OnDeserializeSyncVars?.Invoke(reader, mask, initialState);
     }
 
     void DeserializeObjectsAll(NetworkReader reader)

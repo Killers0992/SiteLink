@@ -1,6 +1,6 @@
 using SiteLink.API.Attributes;
 using SiteLink.API.Commands;
-using SiteLink.API.Networking;
+using SiteLink.API.Networking.Connections;
 using System.Text;
 
 namespace SiteLink.Commands;
@@ -18,7 +18,7 @@ public class ConnectionStatsCommand
 
         string userId = args[0];
 
-        if (!Connection.TryGet(userId, out Connection connection))
+        if (!RemoteConnection.TryGet(userId, out RemoteConnection connection))
         {
             SiteLinkLogger.Info($"Connection for user '(f=yellow){userId}(f=white)' not found.", "connstats");
             return;

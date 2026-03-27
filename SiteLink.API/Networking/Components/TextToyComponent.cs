@@ -33,8 +33,6 @@ public class TextToyComponent : AdminToyBaseComponent
 
     public TextToyComponent(NetworkObject networkObject) : base(networkObject, new SyncListObject<string>())
     {
-        // subscribe only once is done by root; here we only attach leaf hooks
-        this.OnAfterSerialize += AfterSerialize;
     }
 
     protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
@@ -61,13 +59,4 @@ public class TextToyComponent : AdminToyBaseComponent
             writer.WriteString(_textFormat);
         }
     }
-
-    void AfterSerialize(NetworkWriter writer, bool initial)
-    {
-        if (initial)
-        {
-            writer.WriteUInt(0);
-        }
-    }
-
 }

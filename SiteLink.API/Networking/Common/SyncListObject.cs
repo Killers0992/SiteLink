@@ -1,4 +1,5 @@
 ﻿using Mirror;
+using Utils.Networking;
 
 namespace SiteLink.API.Networking.Common;
 
@@ -17,10 +18,14 @@ public class SyncListObject<T> : SyncedNetworkProperty
     public int Index;
     public byte Value;
 
+    public uint Changes;
+
     public void Set(int index, byte val)
     {
         Index = index;
         Value = val;
+
+        Changes = 1;
     }
 
     public override void OnSerializeAll(NetworkWriter writer)
@@ -39,10 +44,18 @@ public class SyncListObject<T> : SyncedNetworkProperty
 
     public override void OnSerializeDelta(NetworkWriter writer)
     {
-        writer.WriteUInt(1);
-        writer.WriteByte((byte)4);
-        writer.WriteUInt((uint)Index);
-        writer.WriteByte(Value);
+        writer.WriteUInt(Changes);
+
+        if (Changes > 0)
+        {
+            // OP_SET
+            writer.WriteByte((byte)4);
+
+            writer.WriteUInt((uint)Index);
+            writer.WriteByte(Value);
+        }
+
+        Changes = 0;
     }
 
     public override void OnDeserializeAll(NetworkReader reader)

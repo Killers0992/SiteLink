@@ -70,7 +70,7 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
     {
     }
 
-    public ServerConfigSynchronizerComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
+    public ServerConfigSynchronizerComponent(NetworkObject networkObject) : this(networkObject, new SyncListObject<sbyte>(), new SyncListObject<AmmoLimit>(), new SyncListObject<PredefinedBanTemplate>())
     {
         //
     }

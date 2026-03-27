@@ -1,8 +1,6 @@
 using SiteLink.API.Attributes;
-using SiteLink.API.Commands;
 using SiteLink.API.Metrics;
-using SiteLink.API.Networking;
-using System.Text;
+using SiteLink.API.Networking.Connections;
 
 namespace SiteLink.Commands;
 
@@ -49,7 +47,7 @@ public class StatsCommand
         sb.AppendLine($" - Uptime: (f=green){SystemStats.Singleton.Uptime.ToReadableString()}(f=white)");
         sb.AppendLine($" - Memory: (f=cyan){SystemStats.Singleton.MemoryUsageMB}(f=white) MB");
         sb.AppendLine($" - Total Transferred: (f=yellow){FormatBytes(SystemStats.Singleton.TotalBytesTransferred)}(f=white)");
-        sb.AppendLine($" - Active Connections: (f=green){Connection.ConnectionByUserId.Count}(f=white)");
+        sb.AppendLine($" - Active Connections: (f=green){RemoteConnection.ConnectionByUserId.Count}(f=white)");
         sb.AppendLine($" - Active Listeners: (f=green){Listener.List.Count}(f=white)");
 
         SiteLinkLogger.Info(sb.ToString(), "stats");
@@ -117,7 +115,7 @@ public class StatsCommand
         StringBuilder sb = new StringBuilder();
         sb.AppendLine("Connection Statistics:");
 
-        var connections = Connection.ConnectionByUserId.Values.ToList();
+        var connections = RemoteConnection.ConnectionByUserId.Values.ToList();
         if (connections.Count == 0)
         {
             sb.AppendLine(" No active connections.");

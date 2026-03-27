@@ -57,9 +57,9 @@ public class ScpServerListHandler : IDisposable
         _scheduleTokenRefresh = false;
 
         if (!File.Exists("verkey.txt"))
-            await File.WriteAllTextAsync("verkey.txt", "none", _cancellationToken);
+            File.WriteAllText("verkey.txt", "none");
 
-        _verKey ??= await File.ReadAllTextAsync("verkey.txt", _cancellationToken);
+        _verKey ??= File.ReadAllText("verkey.txt");
 
         if (string.IsNullOrEmpty(_verKey))
             return;
@@ -174,7 +174,7 @@ public class ScpServerListHandler : IDisposable
         try
         {
             _verKey = token;
-            await File.WriteAllTextAsync("verkey.txt", token, _cancellationToken);
+            File.WriteAllText("verkey.txt", token);
 
             SiteLinkLogger.Info("Token saved", "ScpServerList");
 
@@ -334,7 +334,7 @@ public class ScpServerListHandler : IDisposable
             {
                 var text = response[(response.IndexOf(':') + 1)..].Replace(":", string.Empty);
                 _verKey = text;
-                await File.WriteAllTextAsync("verkey.txt", text, _cancellationToken);
+                File.WriteAllText("verkey.txt", text);
 
                 SiteLinkLogger.Info("Password saved");
                 server.ForceServerListUpdate = true;

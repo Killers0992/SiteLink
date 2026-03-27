@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SiteLink.API.Networking.Connections;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,7 +20,7 @@ namespace SiteLink.API.Commands.Console
 
             string userId = args[0];
 
-            if (!Connection.TryGet(userId, out Connection client))
+            if (!RemoteConnection.TryGet(userId, out RemoteConnection client))
             {
                 SiteLinkLogger.Info($"Not found player with userid (f=green){userId}(f=white)", "effect");
                 return;

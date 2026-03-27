@@ -46,8 +46,6 @@ namespace SiteLink.API.Misc
                 w.WriteUShort(NetworkMessages.SeedMessage);
                 w.WriteInt(seed);
             });
-
-            SiteLinkLogger.Info("Send seed " + seed);
         }
 
         public static void Scene(this MirrorSender sender, string sceneName, byte op = 0, bool customHandling = false)
@@ -121,6 +119,29 @@ namespace SiteLink.API.Misc
 
                 w.WriteUShort(NetworkMessages.SSSEntriesPack);
                 packed.Serialize(w);
+            });
+        }
+
+        public static void Stamina(this MirrorSender sender, uint networkId, float value)
+        {
+            sender.Send(w =>
+            {
+                w.WriteUShort(NetworkMessages.StatMessage);
+
+                w.WriteUInt(networkId);
+
+                // 0 HealthStat
+                // 1 AhpStat
+                // 2 StaminaStat
+                // 3 AdminFlagsStat
+                // 4 HumeShieldStat
+                // 5 Vigor Stat
+                w.WriteByte(0);
+
+                w.WriteByte((byte)StatMessageType.CurrentValue);
+
+                int clampedValue = UnityEngine.Mathf.Clamp(UnityEngine.Mathf.CeilToInt(value), 0, 65535);
+                w.WriteUShort((ushort)clampedValue);
             });
         }
 

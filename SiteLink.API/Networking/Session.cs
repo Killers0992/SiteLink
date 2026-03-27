@@ -1,6 +1,7 @@
 ﻿using Org.BouncyCastle.Tls;
 using PlayerRoles;
 using SiteLink.API.Metrics;
+using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
@@ -137,14 +138,14 @@ namespace SiteLink.API.Networking
             }
         }
 
-        private WeakReference<Connection> _connectionReference;
+        private WeakReference<RemoteConnection> _connectionReference;
         private readonly BatchInterceptor _serverToClient = new(PacketDirection.ServerToClient);
 
-        public Connection Connection
+        public RemoteConnection Connection
         {
             get
             {
-                if (_connectionReference == null || !_connectionReference.TryGetTarget(out Connection connection))
+                if (_connectionReference == null || !_connectionReference.TryGetTarget(out RemoteConnection connection))
                     return null;
 
                 return connection;
@@ -157,7 +158,7 @@ namespace SiteLink.API.Networking
                     return;
                 }
 
-                _connectionReference = new WeakReference<Connection>(value);
+                _connectionReference = new WeakReference<RemoteConnection>(value);
 
                 Nickname = $"Unknown";
                 UserId = value.PreAuth.UserId;
@@ -236,7 +237,7 @@ namespace SiteLink.API.Networking
 
         public MirrorSender AsClient { get; } // sends to server
 
-        public Session(Connection connection, Server[] servers, int ownerThreadId, bool isSilent)
+        public Session(RemoteConnection connection, Server[] servers, int ownerThreadId, bool isSilent)
         {
             IsSilent = isSilent;
             Connection = connection;
@@ -263,26 +264,29 @@ namespace SiteLink.API.Networking
                 });
 
             _serverToClient.Register(NetworkMessages.RoleSyncInfo, OnRoleSync);
-
-            _serverToClient.Register(NetworkMessages.SeedMessage, static (id, r, original, session) =>
-            {
-                int seed = r.ReadInt();
-
-                session.MapSeed = seed;
-
-                if (session.Connection.Session == null)
-                {
-                    SiteLinkLogger.Info(session.Connection.Tag + $" Received map seed (f=green){seed}(f=white) from server but let client take seed");
-                    return InterceptResult.Pass();
-                }
-
-                SiteLinkLogger.Info(session.Connection.Tag + $" Received map seed (f=green){seed}(f=white) from server but drop packet instead.");
-
-                return InterceptResult.Drop();
-            });
-
+            _serverToClient.Register(NetworkMessages.SeedMessage, OnReceiveSeed);
             _serverToClient.Register(NetworkMessages.NetworkPingMessage, OnPing);
             _serverToClient.Register(NetworkMessages.SpawnMessage, OnSpawn);
+            _serverToClient.Register(NetworkMessages.RoundRestartMessage, OnRestart);
+        }
+
+        private InterceptResult OnRestart(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
+        {
+            session.Connection.IsSwitchingServers = true;
+
+            return InterceptResult.Drop();
+        }
+
+        private InterceptResult OnReceiveSeed(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
+        {
+            int seed = reader.ReadInt();
+
+            session.MapSeed = seed;
+
+            if (SessionManager.Singleton.Slots.TryGetValue(session.UserId, out SessionSlot slot) && slot.Pending == null)
+                return InterceptResult.Pass();
+
+            return InterceptResult.Drop();
         }
 
         private InterceptResult OnSpawn(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
@@ -300,8 +304,6 @@ namespace SiteLink.API.Networking
                     session.NetworkId = networkId;
 
                     session.Player = new PlayerObject(null, session, networkId);
-
-                    SiteLinkLogger.Info("Received network id for player obj " + networkId);
                     break;
             }
 
@@ -313,19 +315,14 @@ namespace SiteLink.API.Networking
             uint playerId = reader.ReadUInt();
             RoleTypeId role = reader.ReadRoleType();
 
-            // If session receives role change.
             if (playerId == session.NetworkId)
-            {
                 session?.Server.OnSessionSpawned(session, role);
-            }
-
 
             return InterceptResult.Pass();
         }
 
         private InterceptResult OnPing(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
         {
-
             if (IsDetached)
             {
                 AsClient.Send(w =>
@@ -333,8 +330,6 @@ namespace SiteLink.API.Networking
                     w.WriteUShort(NetworkMessages.NetworkPongMessage);
                     w.WriteDouble(r.ReadDouble());
                 });
-
-                SiteLinkLogger.Info("Received ping send pong back");
             }
 
             return InterceptResult.Pass();
@@ -356,7 +351,7 @@ namespace SiteLink.API.Networking
             NetworkId = Player.NetworkId;
         }
 
-        public void AttachToConnection(Connection connection)
+        public void AttachToConnection(RemoteConnection connection)
         {
             Connection = connection;
             IsDetached = false;
@@ -504,8 +499,6 @@ namespace SiteLink.API.Networking
 
                 Connection.AcceptRequest();
                 Connection.Session = this;
-
-                SiteLinkLogger.Info("Accept request");
                 return;
             }
 
@@ -530,18 +523,15 @@ namespace SiteLink.API.Networking
                     break;
 
                 case DisconnectReason.Timeout:
-                    //SiteLinkLogger.Info($"{Server.Name} Timeout!");
-
+                    SiteLinkLogger.Info($"{Connection?.Tag} Server timeout!");
                     Status = SessionStatus.Timeout;
                     break;
 
                 case DisconnectReason.ConnectionFailed when disconnectInfo.AdditionalData.RawData == null:
-                    //SiteLinkLogger.Info($"Server is offline");
-
                     OnServerOffline.Invoke(new ServerOfflineResponse(ConnectingToServer, ConnectToServers.Count == 0));
 
                     ConnectingToServer = null;
-                    break;
+                    return;
 
                 case DisconnectReason.ConnectionRejected when disconnectInfo.AdditionalData.RawData != null:
                     NetDataWriter rejectedData = NetDataWriter.FromBytes(disconnectInfo.AdditionalData.RawData, disconnectInfo.AdditionalData.UserDataOffset, disconnectInfo.AdditionalData.UserDataSize);
@@ -553,25 +543,26 @@ namespace SiteLink.API.Networking
 
                     switch (reason)
                     {
-                        case RejectionReason.RateLimit:
-
-                            RetryConnect(TimeSpan.FromSeconds(4));
+                        case RejectionReason.ExpiredAuth:
+                            Disconnect("Expired auth");
                             break;
+
+                        case RejectionReason.RateLimit:
+                            RetryConnect(TimeSpan.FromSeconds(4));
+                            return;
 
                         case RejectionReason.Delay:
                             if (!disconnectInfo.AdditionalData.TryGetByte(out byte offset))
                                 break;
 
-                            //SiteLinkLogger.Info("Delayed " + offset);
-
                             OnConnectionDelayed.Invoke(new ConnectionDelayedResponse(ConnectingToServer, offset));
-                            break;
+                            return;
 
                         case RejectionReason.ServerFull:
                             OnServerFull?.Invoke(new ServerFullResponse(ConnectingToServer, ConnectToServers.Count == 0));
 
                             ConnectingToServer = null;
-                            break;
+                            return;
 
                         case RejectionReason.Banned:
                             long expireTime = disconnectInfo.AdditionalData.GetLong();
@@ -579,11 +570,11 @@ namespace SiteLink.API.Networking
                             DateTime date = new DateTime(expireTime, DateTimeKind.Utc).ToLocalTime();
 
                             OnBanned?.Invoke(new BannedResponse(ConnectingToServer, banReason, date));
-                            break;
+                            return;
 
                         case RejectionReason.Challenge:
                             Challenge.ProcessChallenge(disconnectInfo.AdditionalData);
-                            break;
+                            return;
 
                         default:
                             SiteLinkLogger.Info($"{Connection.Tag} Disconnected: {reason}");
@@ -592,6 +583,8 @@ namespace SiteLink.API.Networking
 
                     break;
             }
+
+            Disconnect();
         }
 
         private void OnReceiveDataFromServer(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
@@ -607,12 +600,12 @@ namespace SiteLink.API.Networking
                 if (Connection?.Session != this)
                     return;
 
-                Connection.SendToClient(bytes, position, length, deliveryMethod);
+                Connection.SendToConnection(bytes, position, length, deliveryMethod);
                 return;
             }
 
             if (Connection?.Session == this)
-                Connection.SendToClient(outBytes, outPos, outLen, deliveryMethod);
+                Connection.SendToConnection(outBytes, outPos, outLen, deliveryMethod);
 
             // Return pooled array to pool
             if (pooled && !ReferenceEquals(outBytes, bytes))

@@ -4,7 +4,6 @@ using SiteLink.API.Handlers;
 namespace SiteLink.Services;
 
 public class ListService : BackgroundService
-
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

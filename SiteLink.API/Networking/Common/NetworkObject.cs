@@ -24,7 +24,7 @@ public class NetworkObject : IDisposable
         Owner = owner;
         World = world;
 
-        if (networkId != 0)
+        if (NetworkId == 0)
             NetworkId = networkId;
 
         if (NetworkId == 0)
@@ -34,7 +34,7 @@ public class NetworkObject : IDisposable
         }
         else
         {
-            NetworkId = networkId;
+            networkId = NetworkId;
 
             if (world != null && !world.Objects.ContainsKey(networkId))
                 world.Objects.Add(networkId, this);

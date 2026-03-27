@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using SiteLink.API.Networking.Connections;
 
 namespace SiteLink.API.Commands.Console;
 
@@ -29,7 +25,7 @@ public class SendCommand
         {
             case true when args[0].ToLower() == "all":
                 int sent = 0;
-                foreach (Connection client in Connection.ConnectionByUserId.Values)
+                foreach (RemoteConnection client in RemoteConnection.ConnectionByUserId.Values)
                 {
                     if (client.Session.Server == server)
                         continue;
@@ -43,7 +39,7 @@ public class SendCommand
                 SiteLinkLogger.Info($"Sent (f=green){sent}(f=white) clients to server (f=green){server.Name}(f=white)", "send");
                 break;
             case true when args[0].ToLower().Contains('@'):
-                if (!Connection.TryGet(args[0], out Connection targetPlayer))
+                if (!RemoteConnection.TryGet(args[0], out RemoteConnection targetPlayer))
                 {
                     SiteLinkLogger.Info($"Client with userid {args[0]} does not exist!", "send");
                     break;

@@ -1,10 +1,12 @@
 ﻿using Mirror;
+using Org.BouncyCastle.Asn1.Crmf;
 using Org.BouncyCastle.Asn1.Ocsp;
 using PlayerRoles.FirstPersonControl;
 using RelativePositioning;
 using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Metrics;
+using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 using System.Buffers;
 using UserSettings.ServerSpecific;
@@ -39,7 +41,8 @@ public class Listener : IDisposable
 
     public static bool TryGet(string name, out Listener listener) => ListenersByName.TryGetValue(name, out listener);
 
-    private readonly BatchInterceptor _clientToServer = new(PacketDirection.ClientToServer);
+    public readonly BatchInterceptor ClientToServer = new(PacketDirection.ClientToServer);
+    public readonly ArrayPool<byte> ByteArrayPool = ArrayPool<byte>.Shared;
 
     private string _version;
     private Version _parsedGameVersion;
@@ -51,7 +54,6 @@ public class Listener : IDisposable
 
     private readonly ConcurrentQueue<Connection> _connectionsToRemove = new();
     private readonly Timer _connectionCleanupTimer;
-    private readonly ArrayPool<byte> _byteArrayPool = ArrayPool<byte>.Shared;
 
     private int _threadId;
     private readonly ConcurrentQueue<Action> _workQueue = new();
@@ -153,10 +155,32 @@ public class Listener : IDisposable
 
         EventManager.Listener.InvokeListenerRegistered(new ListenerRegisteredEvent(this));
 
-        _clientToServer.Register(NetworkMessages.AddPlayerMessage, OnAddPlayer);
-        _clientToServer.Register(NetworkMessages.ReadyMessage, OnReady);
-        _clientToServer.Register(NetworkMessages.SSSClientResponse, OnSSSClientResponse);
-        _clientToServer.Register(NetworkMessages.FpcFromClientMessage, OnPosition);
+        ClientToServer.Register(NetworkMessages.AddPlayerMessage, OnAddPlayer);
+        ClientToServer.Register(NetworkMessages.ReadyMessage, OnReady);
+        ClientToServer.Register(NetworkMessages.SSSClientResponse, OnSSSClientResponse);
+        ClientToServer.Register(NetworkMessages.FpcFromClientMessage, OnPosition);
+        ClientToServer.Register(NetworkMessages.CommandMessage, OnCommand);
+    }
+
+    private InterceptResult OnCommand(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
+    {
+        CommandMessage commandMessage = new CommandMessage
+        {
+            netId = reader.ReadUInt(),
+		    componentIndex = reader.ReadByte(),
+		    functionHash = reader.ReadUShort(),
+		    payload = reader.ReadArraySegmentAndSize()
+        };
+
+        if (session.NetworkId == commandMessage.netId && session.Player != null)
+        {
+            using(NetworkReaderPooled commandPayload = NetworkReaderPool.Get(commandMessage.payload))
+            {
+                session.Player.OnReceiveCommand(commandMessage.componentIndex, commandMessage.functionHash, commandPayload);
+            }
+        }
+
+        return InterceptResult.Pass();
     }
 
     static InterceptResult OnAddPlayer(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
@@ -171,8 +195,6 @@ public class Listener : IDisposable
         session.IsReady = true;
 
         session.Server?.InternalSessionReady(session);
-
-        SiteLinkLogger.Info(session.Connection?.Tag + $" Received ready message.");
 
         return InterceptResult.Pass();
     }
@@ -397,6 +419,8 @@ public class Listener : IDisposable
 
         if (!PreAuth.TryRead(this, connectionIpAddress, request.Data, ref response, ref rejectForce, ref preAuth))
         {
+            SiteLinkLogger.Info(response);
+
             switch (response)
             {
                 case DisconnectType.InvalidClientType:
@@ -436,30 +460,47 @@ public class Listener : IDisposable
             return;
         }
 
-        ClientConnectingToListenerEvent ev = new ClientConnectingToListenerEvent(this, request, preAuth);
-        EventManager.Client.InvokeConnectingToListener(ev);
-
-        if (ev.IsCancelled)
-            return;
-
-        if (Connection.ConnectionByUserId.ContainsKey(preAuth.UserId))
+        switch (preAuth.ClientType)
         {
-            SiteLinkLogger.Info($"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");
+            case ClientType.Bridge:
+                BridgeConnection bridgeConnection = new BridgeConnection(this, request, preAuth);
 
-            request.RejectWithReason(RequestWriter, RejectionReason.Error);
-            return;
+                NetPeer peer = bridgeConnection.AcceptRequest();
+
+                bridgeConnection.TargetServer = preAuth.TargetServer;
+                SiteLinkBridge.AttachServerPeer(preAuth.TargetServer, peer);
+
+                SiteLinkLogger.Info($"{bridgeConnection.Tag} {preAuth.TargetServer.Tag} Bridge connected!");
+                break;
+
+            case ClientType.GameClient:
+
+                ClientConnectingToListenerEvent ev = new ClientConnectingToListenerEvent(this, request, preAuth);
+                EventManager.Client.InvokeConnectingToListener(ev);
+
+                if (ev.IsCancelled)
+                    return;
+
+                if (RemoteConnection.ConnectionByUserId.ContainsKey(preAuth.UserId))
+                {
+                    SiteLinkLogger.Info($"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");
+
+                    request.RejectWithReason(RequestWriter, RejectionReason.Error);
+                    return;
+                }
+
+                RemoteConnection connection = new RemoteConnection(this, request, preAuth);
+
+                Stats.RecordConnectionAccepted();
+
+                SiteLinkLogger.Info($"{connection.Tag} Connected to listener ( Ip Address (f=cyan){connection.PreAuth.IpAddress}(f=white), Game Version (f=cyan){connection.PreAuth.ClientVersion.ToString(3)}(f=white) )");
+
+                if (SessionManager.Singleton.TryReattachConnection(connection))
+                    return;
+
+                connection.Connect(Priorities, true);
+                break;
         }
-
-        Connection connection = new Connection(this, request, preAuth);
-
-        Stats.RecordConnectionAccepted();
-
-        SiteLinkLogger.Info($"{connection.Tag} Connected to listener ( Ip Address (f=cyan){connection.PreAuth.IpAddress}(f=white), Game Version (f=cyan){connection.PreAuth.ClientVersion.ToString(3)}(f=white) )");
-
-        if (SessionManager.Singleton.TryReattachConnection(connection))
-            return;
-
-        connection.Connect(Priorities, true);
     }
 
     void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
@@ -474,22 +515,7 @@ public class Listener : IDisposable
         Stats?.RecordBytesReceived(length);
         Stats?.RecordPacketsReceived(1);
 
-        if (connection.Session == null)
-            return;
-
-        byte[] bytes = reader.RawData;
-        int position = reader.Position;
-
-        if (!_clientToServer.TryRewrite(connection?.Session, bytes, position, length, out var outBytes, out var outPos, out var outLen, out bool pooled))
-        {
-            connection.Session?.SendToServer(bytes, position, length, deliveryMethod);
-            return;
-        }
-
-        connection.Session?.SendToServer(outBytes, outPos, outLen, deliveryMethod);
-
-        if (pooled && !ReferenceEquals(outBytes, bytes))
-            _byteArrayPool.Return(outBytes);
+        connection.ReceiveDataFromListener(length, reader, channelNumber, deliveryMethod);
     }
 
     void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
@@ -499,17 +525,20 @@ public class Listener : IDisposable
 
         Stats.RecordConnectionError();
 
+        string tag = connection.Tag;
+
+        connection.Dispose();
+
         switch (disconnectInfo.Reason)
         {
             case DisconnectReason.RemoteConnectionClose:
-                SiteLinkLogger.Info($"{connection.Tag} Client closed the connection!");
+                SiteLinkLogger.Info($"{tag} Client closed the connection!");
                 break;
             default:
-                SiteLinkLogger.Info($"{connection.Tag} Disconnected");
+                SiteLinkLogger.Info($"{tag} Disconnected");
                 break;
         }
 
-        connection.Dispose();
     }
 
     public void Dispose()

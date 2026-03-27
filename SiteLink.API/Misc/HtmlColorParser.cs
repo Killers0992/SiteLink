@@ -11,16 +11,16 @@ namespace SiteLink.API.Misc
         private static readonly Dictionary<string, Color> NamedColors =
             new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
         {
-        { "black", new Color(0f,0f,0f) },
-        { "white", new Color(1f,1f,1f) },
-        { "red", new Color(1f,0f,0f) },
-        { "green", new Color(0f,1f,0f) },
-        { "blue", new Color(0f,0f,1f) },
-        { "yellow", new Color(1f,1f,0f) },
-        { "cyan", new Color(0f,1f,1f) },
-        { "magenta", new Color(1f,0f,1f) },
-        { "gray", new Color(0.5f,0.5f,0.5f) },
-        { "clear", new Color(0f,0f,0f,0f) }
+            { "black", new Color(0f,0f,0f) },
+            { "white", new Color(1f,1f,1f) },
+            { "red", new Color(1f,0f,0f) },
+            { "green", new Color(0f,1f,0f) },
+            { "blue", new Color(0f,0f,1f) },
+            { "yellow", new Color(1f,1f,0f) },
+            { "cyan", new Color(0f,1f,1f) },
+            { "magenta", new Color(1f,0f,1f) },
+            { "gray", new Color(0.5f,0.5f,0.5f) },
+            { "clear", new Color(0f,0f,0f,0f) }
         };
 
         public static bool TryParseHtmlString(string htmlString, out Color color)

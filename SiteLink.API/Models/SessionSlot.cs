@@ -1,4 +1,4 @@
-﻿namespace SiteLink.API.Networking
+﻿namespace SiteLink.API.Models
 {
     public class SessionSlot
     {

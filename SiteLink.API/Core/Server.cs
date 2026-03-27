@@ -1,6 +1,7 @@
 ﻿using PlayerRoles;
 using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
+using SiteLink.API.Networking.Connections;
 
 namespace SiteLink.API.Core;
 
@@ -70,6 +71,8 @@ public class Server
 
     public string Name { get; }
 
+    public BridgeConnection BridgeConnection { get; set; }
+
     public int SessionsCount => _sessions.Count;
 
     public Session[] GetSessionsSnapshot() => _sessions.Keys.ToArray();
@@ -123,6 +126,10 @@ public class Server
 
         SiteLinkLogger.Info($"{Tag} Server registered under ip (f=green){IpAddress}:{Port}(f=white)");
     }
+
+    public void SendToBridge(ushort messageId,
+        Action<NetDataWriter> payload,
+        DeliveryMethod method = DeliveryMethod.ReliableOrdered) => SiteLinkBridge.SendTo(this, messageId, payload, method);
 
     internal bool InternalSessionConnecting(Session session) => OnSessionConnecting(session);
 

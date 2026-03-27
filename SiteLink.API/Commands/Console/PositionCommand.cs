@@ -1,4 +1,6 @@
-﻿namespace SiteLink.API.Commands;
+﻿using SiteLink.API.Networking.Connections;
+
+namespace SiteLink.API.Commands;
 
 public class PositionCommand
 {
@@ -13,7 +15,7 @@ public class PositionCommand
 
         string userId = args[0];
 
-        if (!Connection.TryGet(userId, out Connection client))
+        if (!RemoteConnection.TryGet(userId, out RemoteConnection client))
         {
             SiteLinkLogger.Info($"Not found player with userid (f=green){userId}(f=white)", "position");
             return;

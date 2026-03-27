@@ -169,7 +169,7 @@ public class World : IDisposable
         _waypointsLock.EnterWriteLock();
         try
         {
-            SiteLinkLogger.Info("added waypoint " + waypoint.WaypointToy.WaypointId);
+            //SiteLinkLogger.Info("added waypoint " + waypoint.WaypointToy.WaypointId);
             Waypoints[waypoint.WaypointToy.WaypointId] = waypoint;
         }
         finally

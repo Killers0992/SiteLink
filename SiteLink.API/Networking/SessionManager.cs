@@ -1,5 +1,6 @@
 ﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
+using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 
 namespace SiteLink.API.Networking
@@ -64,7 +65,7 @@ namespace SiteLink.API.Networking
                         {
                             var offline = (now - detachedAt.Value).TotalSeconds;
                             
-                            SiteLinkLogger.Info($"Session re-established for user (f=yellow){userId}(f=white) (offline (f=green){offline:0.0}s(f=white))).", "Session");
+                            SiteLinkLogger.Info($"Session re-established for user (f=yellow){userId}(f=white) (offline (f=green){offline:0.0}s(f=white)).", "Session");
                         }
                         else
                         {
@@ -98,8 +99,8 @@ namespace SiteLink.API.Networking
                 {
                     session.LastExpiryLogSecond = remainingSec;
 
-                    if (!isPending)
-                        SiteLinkLogger.Info($"Session for (f=yellow){userId}(f=white) expires in (f=green){remainingSec}s(f=white) (waiting for reconnect)...", "Session");
+                   // if (!isPending)
+                    //    SiteLinkLogger.Info($"Session for (f=yellow){userId}(f=white) expires in (f=green){remainingSec}s(f=white) (waiting for reconnect)...", "Session");
                 }
 
                 return;
@@ -126,7 +127,7 @@ namespace SiteLink.API.Networking
             try { session.Dispose(); } catch { }
         }
 
-        public Session CreateOrSwitchSession(Connection connection, Server[] servers, bool silent)
+        public Session CreateOrSwitchSession(RemoteConnection connection, Server[] servers, bool silent)
         {
             string userId = connection.PreAuth.UserId;
 
@@ -216,7 +217,7 @@ namespace SiteLink.API.Networking
             pending.Dispose();
         }
 
-        public bool TryReattachConnection(Connection connection)
+        public bool TryReattachConnection(RemoteConnection connection)
         {
             if (!Slots.TryGetValue(connection.PreAuth.UserId, out var slot) || slot.Active == null)
                 return false;
@@ -250,7 +251,7 @@ namespace SiteLink.API.Networking
             //SiteLinkLogger.Info($"Session detached for {userId} {reason}, expires in {DefaultSessionExpirationSeconds}s...");
         }
 
-        private void WireSessionCallbacks(Session session, Connection connection, bool isPending)
+        private void WireSessionCallbacks(Session session, RemoteConnection connection, bool isPending)
         {
             session.OnServerFull += resp =>
             {
