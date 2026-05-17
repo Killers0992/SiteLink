@@ -1,6 +1,4 @@
-using Mirror;
 using InventorySystem.Items;
-using System;
 
 namespace SiteLink.API.Networking.Components;
 
@@ -13,6 +11,8 @@ public class InventoryComponent : BehaviourComponent
     private float _syncMovementLimiter;
 
     private float _syncMovementMultiplier;
+
+    private float _syncSprintMultiplier;
 
     public ItemIdentifier CurItem
     {
@@ -54,6 +54,16 @@ public class InventoryComponent : BehaviourComponent
         }
     }
 
+    public float SyncSprintMultiplier
+    {
+        get => _syncSprintMultiplier;
+        set
+        {
+            SetSyncVarDirtyBit(16UL);
+            _syncSprintMultiplier = value;
+        }
+    }
+
     public InventoryComponent(NetworkObject networkObject, params SyncedNetworkProperty[] objects) : base(networkObject, objects)
     {
     }
@@ -73,6 +83,7 @@ public class InventoryComponent : BehaviourComponent
             writer.WriteFloat(_syncStaminaModifier);
             writer.WriteFloat(_syncMovementLimiter);
             writer.WriteFloat(_syncMovementMultiplier);
+            writer.WriteFloat(_syncSprintMultiplier);
             return;
         }
 
@@ -97,6 +108,11 @@ public class InventoryComponent : BehaviourComponent
         if ((SyncVarDirtyBits & 8UL) != 0UL)
         {
             writer.WriteFloat(_syncMovementMultiplier);
+        }
+
+        if ((SyncVarDirtyBits & 16UL) != 0UL)
+        {
+            writer.WriteFloat(_syncSprintMultiplier);
         }
     }
 

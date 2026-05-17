@@ -1,6 +1,5 @@
-﻿using SiteLink.API.Core;
+﻿using SiteLink.API.Metrics;
 using SiteLink.API.Models;
-using SiteLink.API.Metrics;
 using SiteLink.Servers;
 using System.Diagnostics;
 
@@ -29,7 +28,7 @@ public class ListenersService : BackgroundService
                 new Listener(settings.Name);
             }
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             Console.WriteLine(ex);
         }

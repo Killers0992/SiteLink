@@ -1,6 +1,3 @@
-using Mirror;
-using System;
-
 namespace SiteLink.API.Networking.Components;
 
 public class NicknameSyncComponent : BehaviourComponent
@@ -72,20 +69,6 @@ public class NicknameSyncComponent : BehaviourComponent
     public NicknameSyncComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
         //
-    }
-
-    public override bool OnReceiveCommand(ushort functionHash, NetworkReader reader)
-    {
-        switch (functionHash)
-        {
-            case NetworkMessages.NicknameSync.Commands.SetNick:
-                MyNickSync = reader.ReadString();
-
-                Object.SendUpdate(Object.Owner);
-                break;
-        }
-
-        return true;
     }
 
     protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)

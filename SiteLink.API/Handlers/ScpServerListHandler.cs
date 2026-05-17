@@ -83,8 +83,13 @@ public class ScpServerListHandler : IDisposable
 
             if (!string.IsNullOrEmpty(cached))
             {
-                ServerConsole.PublicKey = ECDSA.PublicKeyFromString(cached);
-                cacheHash = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(ServerConsole.PublicKey)));
+                PublicKey = ECDSA.PublicKeyFromString(cached);
+                cacheHash = 
+                    Sha.HashToString(
+                        Sha.Sha256(
+                            ECDSA.KeyToString(
+                                PublicKey
+                    )));
 
                 SiteLinkLogger.Debug("Loaded central server public key from cache.");
                 SiteLinkLogger.Debug("SHA256 of public key: " + cacheHash);
@@ -118,8 +123,8 @@ public class ScpServerListHandler : IDisposable
             }
             else
             {
-                ServerConsole.PublicKey = ECDSA.PublicKeyFromString(publicKeyResponse.Key);
-                string str = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(ServerConsole.PublicKey)));
+                PublicKey = ECDSA.PublicKeyFromString(publicKeyResponse.Key);
+                string str = Sha.HashToString(Sha.Sha256(ECDSA.KeyToString(PublicKey)));
 
                 SiteLinkLogger.Info("Downloaded public key from central server.");
                 SiteLinkLogger.Info("SHA256 of public key: " + str);

@@ -1,43 +1,40 @@
-﻿using System.Reflection;
-using UnityEngine;
+﻿using InventorySystem.Items;
+using Mirror;
 
 namespace SiteLink.Misc;
 
-public class ReadWriterInitializer
+public static class ReadWriterInitializer
 {
     public static void InitializeAll()
     {
-        try
-        {
-            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                if (assembly.IsDynamic)
-                    continue;
+        Writer<byte>.write = WriteByte;
 
-                foreach (Type type in assembly.GetTypes())
-                {
-                    var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
-                        .Where(m =>
-                            m.Name == "InitReadWriters" &&
-                            m.IsDefined(typeof(RuntimeInitializeOnLoadMethodAttribute), inherit: false));
+        Reader<ItemIdentifier>.read = ReadItemIdentifier;
+        Writer<ItemIdentifier>.write = WriteItemIdentifier;
 
-                    foreach (MethodInfo method in methods)
-                    {
-                        try
-                        {
-                            method.Invoke(null, null);
-                        }
-                        catch (Exception ex)
-                        {
-                            SiteLinkLogger.Error($"Failed to call {type.FullName}.{method.Name}(): {ex}");
-                        }
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            SiteLinkLogger.Error($"Initialization failed: {ex}", "InitReadWriters");
-        }
+        Writer<PlayerInfoArea>.write = WritePlayerInfoArea;
+        Reader<PlayerInfoArea>.read = ReadPlayerInfoArea;
     }
+
+    // byte
+
+    public static void WriteByte(NetworkWriter writer, byte b) => writer.WriteByte(b);
+
+    // ItemIdentifier
+
+    public static void WriteItemIdentifier(NetworkWriter writer, ItemIdentifier itemIdentifier)
+    {
+        writer.WriteItemType(itemIdentifier.TypeId);
+        writer.WriteUShort(itemIdentifier.SerialNumber);
+    }
+
+    public static ItemIdentifier ReadItemIdentifier(NetworkReader reader) => new ItemIdentifier(reader.ReadItemType(), reader.ReadUShort());
+
+    // ItemType
+    public static void WriteItemType(this NetworkWriter writer, ItemType itemType) => writer.WriteInt((int)itemType);
+    public static ItemType ReadItemType(this NetworkReader reader) => (ItemType) reader.ReadInt();
+
+    // PlayerInfoArea
+    public static void WritePlayerInfoArea(this NetworkWriter writer, PlayerInfoArea area) => writer.WriteInt((int)area);
+    public static PlayerInfoArea ReadPlayerInfoArea(this NetworkReader reader) => (PlayerInfoArea) reader.ReadInt();
 }

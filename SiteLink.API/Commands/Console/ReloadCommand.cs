@@ -41,7 +41,7 @@ public class ReloadCommand
             new Listener(listener);
         }
 
-        foreach(Plugin plugin in PluginsManager.AssemblyToPlugin.Values)
+        foreach (Plugin plugin in PluginsManager.AssemblyToPlugin.Values)
         {
             plugin.LoadConfig();
         }
@@ -49,7 +49,7 @@ public class ReloadCommand
         SiteLinkLogger.Info("Reloaded");
     }
 
-    static string[] GetServers() => 
+    static string[] GetServers() =>
         SiteLinkSettings.Singleton.Servers
             .Select(x => x.Name)
             .ToArray();

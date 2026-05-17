@@ -1,17 +1,8 @@
-﻿using Hazards;
-using LabApi.Events.Handlers;
+﻿using LabApi.Events.Handlers;
 using LabApi.Loader.Features.Plugins;
-using MapGeneration;
-using Mirror;
-using PlayerRoles.PlayableScps.HumanTracker;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Text.RegularExpressions;
-using UnityEngine;
 
 namespace SiteLink.Generator;
 
@@ -53,7 +44,7 @@ public class MainClass : Plugin
 
         File.WriteAllLines("D:\\VS Projects\\SiteLink\\SiteLink.API\\Enums\\EffectType.cs", lines);
 
-        //ProtocolGenerator.Generate();
+        ProtocolGenerator.Generate();
     }
 
     public override void Disable()

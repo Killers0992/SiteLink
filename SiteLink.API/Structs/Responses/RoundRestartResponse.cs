@@ -1,4 +1,6 @@
-﻿namespace SiteLink.API.Structs;
+﻿using RoundRestarting;
+
+namespace SiteLink.API.Structs;
 
 public struct RoundRestartResponse : IDisconnectResponse
 {

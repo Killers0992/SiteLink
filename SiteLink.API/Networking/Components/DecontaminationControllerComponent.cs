@@ -1,6 +1,3 @@
-using Mirror;
-using System;
-using LightContainmentZoneDecontamination;
 using static LightContainmentZoneDecontamination.DecontaminationController;
 
 namespace SiteLink.API.Networking.Components;

@@ -1,7 +1,4 @@
-﻿using Mirror;
-using Utils.Networking;
-
-namespace SiteLink.API.Networking.Common;
+﻿namespace SiteLink.API.Networking.Common;
 
 public class SyncListObject<T> : SyncedNetworkProperty
 {

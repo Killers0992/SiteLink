@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.2.11415.280 d18.0
+VisualStudioVersion = 18.2.11415.280
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink", "SiteLink\SiteLink.csproj", "{EACB1952-B8A6-E2E1-3AE4-CF5F3DBBF8BE}"
 EndProject
@@ -16,6 +16,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink.Portals", "..\SiteLink.Portals\SiteLink.Portals\SiteLink.Portals.csproj", "{839E1211-1F4A-B68F-46EC-E849F964C35C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink.Queue", "..\SiteLink.Queue\SiteLink.Queue\SiteLink.Queue.csproj", "{B1DD7182-C6ED-590F-2BAC-EECC8B73C5EB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink.Decompiler", "SiteLink.Decompiler\SiteLink.Decompiler.csproj", "{880C2766-0C89-457D-ABE9-4CBFF46EFDBD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink.Protocol", "SiteLink.Protocol\SiteLink.Protocol.csproj", "{58DDB1B7-9CBD-4460-A873-3A028D659418}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,6 +51,14 @@ Global
 		{B1DD7182-C6ED-590F-2BAC-EECC8B73C5EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B1DD7182-C6ED-590F-2BAC-EECC8B73C5EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B1DD7182-C6ED-590F-2BAC-EECC8B73C5EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{880C2766-0C89-457D-ABE9-4CBFF46EFDBD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{880C2766-0C89-457D-ABE9-4CBFF46EFDBD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{880C2766-0C89-457D-ABE9-4CBFF46EFDBD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{880C2766-0C89-457D-ABE9-4CBFF46EFDBD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{58DDB1B7-9CBD-4460-A873-3A028D659418}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{58DDB1B7-9CBD-4460-A873-3A028D659418}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{58DDB1B7-9CBD-4460-A873-3A028D659418}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{58DDB1B7-9CBD-4460-A873-3A028D659418}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

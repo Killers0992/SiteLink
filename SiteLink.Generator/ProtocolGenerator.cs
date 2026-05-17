@@ -18,6 +18,16 @@ public class ProtocolGenerator
 {
     static int id = 0;
 
+    static List<uint> WhitelistedObjects = new List<uint>()
+    {
+        3938583646,
+        162530276,
+        1321952889,
+        3816198336,
+        3956448839,
+        180257209
+    };
+
     static Dictionary<string, ComponentGenerationInfo> componentMap = new()
     {
         ["AdminToys.WaypointToy"] = new ComponentGenerationInfo
@@ -70,6 +80,9 @@ public class ProtocolGenerator
 
         foreach (NetworkIdentity identity in networkIdentities)
         {
+            if (!WhitelistedObjects.Contains(identity.assetId))
+                continue;
+
             string className = identity.gameObject.name.CapitalizeFirst();
 
             className = className.ReplaceWhitespace(string.Empty);

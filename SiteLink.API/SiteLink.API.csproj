@@ -9,8 +9,10 @@
 		<TargetFrameworks>net9.0;net48</TargetFrameworks>
 
 		<LangVersion>latest</LangVersion>
+		
+		<DefineConstants>UNITY_2018_3_OR_NEWER</DefineConstants>
 	</PropertyGroup>
-	
+
 	<PropertyGroup>
 		<Title>SiteLink.API</Title>
 		<Description>SiteLink.API provides a powerful development interface for creating custom plugins with SiteLink — a high-performance proxy for SCP: Secret Laboratory.</Description>
@@ -20,9 +22,10 @@
 		<PackageProjectUrl>https://github.com/Killers0992/SiteLink</PackageProjectUrl>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	</PropertyGroup>
 	
-	<ItemGroup Condition="  '$(TargetFramework)' == 'net48'">
+	<ItemGroup Condition="'$(TargetFramework)' == 'net48'">
 		<Compile Remove="**\*.cs" />
 		<Compile Include="SiteLinkBridge.cs" />
 	</ItemGroup>
@@ -36,17 +39,19 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Reference Include="Assembly-CSharp">
+		<Reference Include="Assembly-CSharp" Condition="'$(TargetFramework)' == 'net48'">
 			<HintPath>$(SL_REFERENCES)\Assembly-CSharp.dll</HintPath>
 		</Reference>
+
+		<Reference Include="mscorlib" Condition="'$(TargetFramework)' == 'net48'">
+			<HintPath>$(SL_REFERENCES)\mscorlib.dll</HintPath>
+		</Reference>
+		
 		<Reference Include="BouncyCastle.Cryptography">
 			<HintPath>$(SL_REFERENCES)\BouncyCastle.Cryptography.dll</HintPath>
 		</Reference>
 		<Reference Include="Mirror">
 			<HintPath>$(SL_REFERENCES)\Mirror.dll</HintPath>
-		</Reference>
-		<Reference Include="System.Core">
-		  <HintPath>C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8\System.Core.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.CoreModule">
 			<HintPath>$(UNITY_REFERENCES)\UnityEngine.CoreModule.dll</HintPath>
@@ -62,6 +67,10 @@
 			<Pack>True</Pack>
 			<PackagePath>\</PackagePath>
 		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SiteLink.Protocol\SiteLink.Protocol.csproj" Condition="'$(TargetFramework)' == 'net9.0'" />
 	</ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net48'">

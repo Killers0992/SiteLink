@@ -3,7 +3,7 @@ namespace SiteLink.API.Networking.Objects;
 
 //
 // Name: RespawnManager
-// NetworkID: 439
+// NetworkID: 436
 // AssetID: 180257209
 // SceneID: 3656837585036799549
 // Path: GameManager/RespawnManager
@@ -13,7 +13,7 @@ public class RespawnManagerObject : NetworkObject
     public const uint ObjectAssetId = 180257209;
     public const ulong ObjectSceneId = 3656837585036799549;
 
-    public override uint NetworkId { get; set; } = 439;
+    public override uint NetworkId { get; set; } = 436;
     public override uint AssetId { get; } = ObjectAssetId;
     public override ulong SceneId { get; } = ObjectSceneId;
 

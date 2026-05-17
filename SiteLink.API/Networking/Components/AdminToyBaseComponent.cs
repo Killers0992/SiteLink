@@ -1,16 +1,12 @@
-using Mirror;
-using UnityEngine;
-using System;
-
 namespace SiteLink.API.Networking.Components;
 
 public class AdminToyBaseComponent : BehaviourComponent
 {
     private Vector3 _position;
 
-    private Quaternion _rotation = Quaternion.identity;
+    private Quaternion _rotation;
 
-    private Vector3 _scale = Vector3.one;
+    private Vector3 _scale;
 
     private byte _movementSmoothing;
 
@@ -118,12 +114,4 @@ public class AdminToyBaseComponent : BehaviourComponent
         }
     }
 
-    public override void OnSerialize(NetworkWriter writer, bool initialState)
-    {
-        base.OnSerialize(writer, initialState);
-
-        // parent
-        if (initialState)
-            writer.WriteUInt(0);
-    }
 }

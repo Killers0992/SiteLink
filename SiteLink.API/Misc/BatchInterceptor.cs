@@ -1,6 +1,4 @@
-﻿using System.Buffers;
-
-namespace SiteLink.API.Misc
+﻿namespace SiteLink.API.Misc
 {
     public delegate InterceptResult MessageHandler(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session);
 

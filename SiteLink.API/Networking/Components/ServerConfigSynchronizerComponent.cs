@@ -1,7 +1,3 @@
-using Mirror;
-using System;
-using static ServerConfigSynchronizer;
-
 namespace SiteLink.API.Networking.Components;
 
 public class ServerConfigSynchronizerComponent : BehaviourComponent
@@ -70,7 +66,7 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
     {
     }
 
-    public ServerConfigSynchronizerComponent(NetworkObject networkObject) : this(networkObject, new SyncListObject<sbyte>(), new SyncListObject<AmmoLimit>(), new SyncListObject<PredefinedBanTemplate>())
+    public ServerConfigSynchronizerComponent(NetworkObject networkObject) : this(networkObject, Array.Empty<SyncedNetworkProperty>())
     {
         //
     }

@@ -1,20 +1,14 @@
-﻿using Mirror;
-using Org.BouncyCastle.Asn1.Crmf;
-using Org.BouncyCastle.Asn1.Ocsp;
-using PlayerRoles.FirstPersonControl;
-using RelativePositioning;
-using SiteLink.API.Events;
+﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Metrics;
 using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 using System.Buffers;
-using UserSettings.ServerSpecific;
 
 namespace SiteLink.API.Networking;
 
 public class Listener : IDisposable
-{        
+{
     /// <summary>
     /// The inverse accuracy constant for position calculations.
     /// </summary>
@@ -128,6 +122,13 @@ public class Listener : IDisposable
         _listener.NetworkReceiveEvent += OnNetworkReceive;
         _listener.PeerDisconnectedEvent += OnPeerDisconnected;
 
+        _listener.NetworkErrorEvent += (endPoint, socketError) =>
+        {
+            SiteLinkLogger.Error($"{Tag} Network error from {endPoint}: {socketError}");
+        };
+
+        SiteLinkLogger.Info("Listener initialized");
+
         _manager = new NetManager(_listener)
         {
             UpdateTime = 5,
@@ -167,14 +168,14 @@ public class Listener : IDisposable
         CommandMessage commandMessage = new CommandMessage
         {
             netId = reader.ReadUInt(),
-		    componentIndex = reader.ReadByte(),
-		    functionHash = reader.ReadUShort(),
-		    payload = reader.ReadArraySegmentAndSize()
+            componentIndex = reader.ReadByte(),
+            functionHash = reader.ReadUShort(),
+            payload = reader.ReadArraySegmentAndSize()
         };
 
         if (session.NetworkId == commandMessage.netId && session.Player != null)
         {
-            using(NetworkReaderPooled commandPayload = NetworkReaderPool.Get(commandMessage.payload))
+            using (NetworkReaderPooled commandPayload = NetworkReaderPool.Get(commandMessage.payload))
             {
                 session.Player.OnReceiveCommand(commandMessage.componentIndex, commandMessage.functionHash, commandPayload);
             }
@@ -201,9 +202,9 @@ public class Listener : IDisposable
 
     static InterceptResult OnSSSClientResponse(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
     {
-        SSSClientResponse response = new SSSClientResponse(r);
+        //SSSClientResponse response = new SSSClientResponse(r);
 
-        session.Server?.OnSessionSSSReponse(session, response.Id);
+        //session.Server?.OnSessionSSSReponse(session, response.Id);
 
         return InterceptResult.Pass();
     }
@@ -221,9 +222,9 @@ public class Listener : IDisposable
 
         ushort _rotH, _rotV;
 
-        global::Misc.ByteToBools(code, out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
+        //global::Misc.ByteToBools(code, out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
 
-        PlayerMovementState _state = (PlayerMovementState)global::Misc.BoolsToByte(b1, b2, b3, b4, b5);
+        //PlayerMovementState _state = (PlayerMovementState)global::Misc.BoolsToByte(b1, b2, b3, b4, b5);
 
         if (_bitPosition)
         {
@@ -413,6 +414,8 @@ public class Listener : IDisposable
     {
         string connectionIpAddress = $"{request.RemoteEndPoint.Address}";
 
+        Console.WriteLine("Connection attempt from " + connectionIpAddress);
+
         DisconnectType response = DisconnectType.Valid;
         bool rejectForce = false;
         PreAuth preAuth = default;
@@ -465,7 +468,7 @@ public class Listener : IDisposable
             case ClientType.Bridge:
                 BridgeConnection bridgeConnection = new BridgeConnection(this, request, preAuth);
 
-                NetPeer peer = bridgeConnection.AcceptRequest();
+                LiteNetPeer peer = bridgeConnection.AcceptRequest();
 
                 bridgeConnection.TargetServer = preAuth.TargetServer;
                 SiteLinkBridge.AttachServerPeer(preAuth.TargetServer, peer);

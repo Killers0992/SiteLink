@@ -1,12 +1,8 @@
 ﻿using Hints;
-using Mirror;
 using PlayerRoles;
 using PlayerStatsSystem;
 using RelativePositioning;
-using SiteLink.API.Networking;
-using UnityEngine.SceneManagement;
 using UserSettings.ServerSpecific;
-using YamlDotNet.Core.Tokens;
 using static PlayerStatsSystem.SyncedStatMessages;
 
 namespace SiteLink.API.Misc
@@ -190,7 +186,7 @@ namespace SiteLink.API.Misc
                     w.WriteByte((byte)AdminFlags.Noclip);
                 else
                     w.WriteByte((byte)AdminFlags.None);
-            });;
+            }); ;
         }
 
         public static void Role(this MirrorSender sender, uint networkId, RoleTypeId role)
@@ -203,7 +199,7 @@ namespace SiteLink.API.Misc
 
                 w.WriteSByte((sbyte)role);
 
-                w.WriteRelativePosition(new RelativePosition(new UnityEngine.Vector3(0f, 0f, 0f)));
+                w.WriteRelativePosition(new RelativePosition());
                 w.WriteUShort(0);
             });
         }

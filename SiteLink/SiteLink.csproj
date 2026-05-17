@@ -23,9 +23,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Reference Include="Assembly-CSharp">
-            <HintPath>$(SL_REFERENCES)\Assembly-CSharp.dll</HintPath>
-        </Reference>
         <Reference Include="BouncyCastle.Cryptography">
             <HintPath>$(SL_REFERENCES)\BouncyCastle.Cryptography.dll</HintPath>
         </Reference>

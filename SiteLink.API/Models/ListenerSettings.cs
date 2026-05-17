@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using YamlDotNet.Serialization;
 
 namespace SiteLink.API.Models;
 

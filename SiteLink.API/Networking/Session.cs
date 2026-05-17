@@ -1,5 +1,4 @@
-﻿using Org.BouncyCastle.Tls;
-using PlayerRoles;
+﻿using PlayerRoles;
 using SiteLink.API.Metrics;
 using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
@@ -611,7 +610,7 @@ namespace SiteLink.API.Networking
             if (pooled && !ReferenceEquals(outBytes, bytes))
                 ArrayPool<byte>.Shared.Return(outBytes);
         }
-        
+
         private void EnsureNet()
         {
             if (_netManager != null && _listener != null)
