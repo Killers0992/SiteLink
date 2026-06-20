@@ -127,8 +127,6 @@ public class Listener : IDisposable
             SiteLinkLogger.Error($"{Tag} Network error from {endPoint}: {socketError}");
         };
 
-        SiteLinkLogger.Info("Listener initialized");
-
         _manager = new NetManager(_listener)
         {
             // Server only.

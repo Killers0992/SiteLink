@@ -75,6 +75,14 @@ public class NetworkObject : IDisposable
         client.Connection.AsServer.Send(wr);
     }
 
+    public void SendUpdate()
+    {
+        foreach(Session client in Observers)
+        {
+            SendUpdate(client);
+        }
+    }
+
     public void Deserialize(NetworkReader reader, bool intialState)
     {
         ulong mask = Compression.DecompressVarUInt(reader);
