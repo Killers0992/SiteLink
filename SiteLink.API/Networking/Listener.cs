@@ -226,9 +226,7 @@ public class Listener : IDisposable
 
         ushort _rotH, _rotV;
 
-        //global::Misc.ByteToBools(code, out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
-
-        //PlayerMovementState _state = (PlayerMovementState)global::Misc.BoolsToByte(b1, b2, b3, b4, b5);
+        code.ByteToBools(out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
 
         if (_bitPosition)
         {
@@ -423,8 +421,6 @@ public class Listener : IDisposable
 
         if (!PreAuth.TryRead(this, connectionIpAddress, request.Data, ref response, ref rejectForce, ref preAuth))
         {
-            SiteLinkLogger.Info(response);
-
             switch (response)
             {
                 case DisconnectType.InvalidClientType:
@@ -479,12 +475,6 @@ public class Listener : IDisposable
 
             case ClientType.GameClient:
 
-                ClientConnectingToListenerEvent ev = new ClientConnectingToListenerEvent(this, request, preAuth);
-                EventManager.Client.InvokeConnectingToListener(ev);
-
-                if (ev.IsCancelled)
-                    return;
-
                 if (RemoteConnection.ConnectionByUserId.ContainsKey(preAuth.UserId))
                 {
                     SiteLinkLogger.Info($"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");
@@ -492,6 +482,12 @@ public class Listener : IDisposable
                     request.RejectWithReason(RequestWriter, RejectionReason.Error);
                     return;
                 }
+
+                ClientConnectingToListenerEvent ev = new ClientConnectingToListenerEvent(this, request, preAuth);
+                EventManager.Client.InvokeConnectingToListener(ev);
+
+                if (ev.IsCancelled)
+                    return;
 
                 RemoteConnection connection = new RemoteConnection(this, request, preAuth);
 

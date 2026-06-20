@@ -214,4 +214,16 @@ public static class Extensions
 
         return q;
     }
+
+    public static void ByteToBools(this byte b, out bool bool1, out bool bool2, out bool bool3, out bool bool4, out bool bool5, out bool bool6, out bool bool7, out bool bool8)
+    {
+        bool1 = ((b & 1) == 1);
+        bool2 = ((b & 2) == 2);
+        bool3 = ((b & 4) == 4);
+        bool4 = ((b & 8) == 8);
+        bool5 = ((b & 16) == 16);
+        bool6 = ((b & 32) == 32);
+        bool7 = ((b & 64) == 64);
+        bool8 = ((b & 128) == 128);
+    }
 }
