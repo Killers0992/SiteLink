@@ -28,7 +28,7 @@ It connects multiple servers into one seamless network, enabling load balancing,
 
 # Installation
 
-### **1. Prepare a machine capable of running .NET 9**
+### **1. Prepare a machine capable of running .NET 10**
 You can host SiteLink on:
 - Dedicated server  
 - VPS  
