@@ -10,8 +10,8 @@
 
 It connects multiple servers into one seamless network, enabling load balancing, player transfers, and centralized management — built for stability, speed, and scalability.
 
-> **API Version:** `2.0.0`  
-> **Supported Game Version:** `14.2.6`  
+> **API Version:** `2.0.1`  
+> **Supported Game Version:** `14.2.7`  
 
 ---
 
@@ -28,7 +28,7 @@ It connects multiple servers into one seamless network, enabling load balancing,
 
 # Installation
 
-### **1. Prepare a machine capable of running .NET 9**
+### **1. Prepare a machine capable of running .NET 10**
 You can host SiteLink on:
 - Dedicated server  
 - VPS  
@@ -48,6 +48,16 @@ You can host SiteLink on:
 
 ### **4. Edit `settings.yml`**
 Configure your network, servers, listeners, and server-list options.
+
+## Available Plugins
+
+SiteLink can be extended with plugins placed inside the `Plugins` directory.  
+
+| Plugin | Version / Requirement | Description |
+|---|---|---|
+| [SiteLink.Portals](https://github.com/Killers0992/SiteLink.Portals) | Requires **SiteLink `2.0.1+`** | Universal portal API for redirecting players between SiteLink servers. |
+| [SiteLink.Lobby](https://github.com/Killers0992/SiteLink.Lobby) | Requires **SiteLink `2.0.1+`** and **Portals `1.0.2`** | Dedicated lobby world with interactive portals and floating texts. |
+| [SiteLink.Queue](https://github.com/Killers0992/SiteLink.Queue) | Requires **SiteLink `2.0.1+`** | Automatic queue system for full target servers. |
 
 ---
 
