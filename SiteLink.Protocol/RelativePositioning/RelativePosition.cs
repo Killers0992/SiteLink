@@ -13,18 +13,7 @@ namespace RelativePositioning
 
 		public readonly byte WaypointId;
 
-		public readonly bool OutOfRange;
-
-		public RelativePosition()
-		{
-			PositionX = 0;
-			PositionY = 0;
-			PositionZ = 0;
-			WaypointId = 0;
-			OutOfRange = false;
-        }
-
-        public RelativePosition (NetworkReader reader)
+		public RelativePosition (NetworkReader reader)
 		{
 			WaypointId = reader.ReadByte ();
 			if (WaypointId > 0) {
@@ -36,7 +25,7 @@ namespace RelativePositioning
 				PositionY = 0;
 				PositionZ = 0;
 			}
-			OutOfRange = false;
+			//OutOfRange = false;
 		}
 
 		public void Write (NetworkWriter writer)

@@ -447,9 +447,6 @@ namespace SiteLink.API.Networking
         {
             if (Connection?.Session == this)
                 Connection?.Disconnect(reason);
-
-            if (_netManager?.FirstPeer != null)
-                _netManager.FirstPeer.Disconnect();
         }
 
         public void Update()
@@ -521,9 +518,15 @@ namespace SiteLink.API.Networking
                     SiteLinkLogger.Info($"{Connection?.Tag} Disconnect undefined {disconnectInfo.Reason}");
                     break;
 
+                // Happens during server shutdown.
+                case DisconnectReason.RemoteConnectionClose:
+                    Disconnect($"[SiteLink]\nServer {Server.Name} shutdown...");
+                    return;
+
                 case DisconnectReason.Timeout:
-                    SiteLinkLogger.Info($"{Connection?.Tag} Server timeout!");
+                    SiteLinkLogger.Info($"{Connection?.Tag} Server timeout! " + disconnectInfo.Reason + " " + disconnectInfo.SocketErrorCode);
                     Status = SessionStatus.Timeout;
+                    Disconnect();
                     break;
 
                 case DisconnectReason.ConnectionFailed when disconnectInfo.AdditionalData.RawData == null:
@@ -617,17 +620,18 @@ namespace SiteLink.API.Networking
                 return;
 
             _listener = new EventBasedNetListener();
+
             _listener.PeerConnectedEvent += OnConnected;
             _listener.NetworkReceiveEvent += OnReceiveDataFromServer;
             _listener.PeerDisconnectedEvent += OnDisconnected;
 
             _netManager = new NetManager(_listener)
             {
-                UpdateTime = 5,
-                ChannelsCount = (byte)6,
-                DisconnectTimeout = 1000,
-                ReconnectDelay = 300,
-                MaxConnectAttempts = 3,
+                UpdateTime = NetSettings.UpdateTime,
+                ChannelsCount = NetSettings.ChannelsCount,
+                DisconnectTimeout = NetSettings.SessionDisconnectTimeout,
+                ReconnectDelay = NetSettings.SessionReconnectDelay,
+                MaxConnectAttempts = NetSettings.SessionMaxConnectAttempts,
             };
 
             _netManager.Start();

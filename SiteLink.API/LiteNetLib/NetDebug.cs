@@ -45,18 +45,7 @@ namespace LiteNetLib
         {
             lock (DebugLogLock)
             {
-                if (Logger == null)
-                {
-#if UNITY_5_3_OR_NEWER
-                    UnityEngine.Debug.Log(string.Format(str, args));
-#else
-                    Console.WriteLine(str, args);
-#endif
-                }
-                else
-                {
-                    Logger.WriteNet(logLevel, str, args);
-                }
+                Console.WriteLine(str, args);
             }
         }
 

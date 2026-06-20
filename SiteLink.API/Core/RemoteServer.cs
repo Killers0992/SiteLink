@@ -44,7 +44,7 @@ public class RemoteServer : Server
     {
         SiteLinkLogger.Info("Session " + session.UserId + " spawned as " + role);
 
-        session.Connection?.AsServer.ServerSpecificEntries(ServerSettings);
+        //session.Connection?.AsServer.ServerSpecificEntries(ServerSettings);
     }
 
     public override void OnSessionSSSReponse(Session session, int id)

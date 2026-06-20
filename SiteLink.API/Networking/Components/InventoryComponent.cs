@@ -1,4 +1,6 @@
+using Mirror;
 using InventorySystem.Items;
+using System;
 
 namespace SiteLink.API.Networking.Components;
 

@@ -1,3 +1,5 @@
+using System;
+
 namespace SiteLink.API.Networking.Components;
 
 public class PlayerEffectsControllerComponent : BehaviourComponent
@@ -6,7 +8,7 @@ public class PlayerEffectsControllerComponent : BehaviourComponent
     {
     }
 
-    public PlayerEffectsControllerComponent(NetworkObject networkObject) : this(networkObject, new[] {new SyncListObject<byte>(255) })
+    public PlayerEffectsControllerComponent(NetworkObject networkObject) : this(networkObject, new[] { new SyncListObject<byte>(255)})
     {
         //
     }

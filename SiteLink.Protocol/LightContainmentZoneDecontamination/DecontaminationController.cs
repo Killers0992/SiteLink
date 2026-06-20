@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Mirror;
+using UnityEngine;
 
 namespace LightContainmentZoneDecontamination
 {

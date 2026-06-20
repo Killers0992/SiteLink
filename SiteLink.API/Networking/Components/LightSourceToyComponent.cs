@@ -1,3 +1,7 @@
+using Mirror;
+using System;
+using UnityEngine;
+
 namespace SiteLink.API.Networking.Components;
 
 public class LightSourceToyComponent : AdminToyBaseComponent

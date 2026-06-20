@@ -131,17 +131,19 @@ public class Listener : IDisposable
 
         _manager = new NetManager(_listener)
         {
-            UpdateTime = 5,
+            // Server only.
             BroadcastReceiveEnabled = true,
-            ChannelsCount = (byte)6,
-            DisconnectTimeout = 6000,
-            ReconnectDelay = 400,
-            MaxConnectAttempts = 2,
+
+            UpdateTime = NetSettings.UpdateTime,
+            ChannelsCount = NetSettings.ChannelsCount,
+            DisconnectTimeout = NetSettings.SessionDisconnectTimeout,
+            ReconnectDelay = NetSettings.SessionReconnectDelay,
+            MaxConnectAttempts = NetSettings.SessionMaxConnectAttempts,
         };
 
         ListenersByName.TryAdd(Name, this);
 
-        if (!_manager.StartInManualMode(IPAddress.Parse(ListenAddress), IPAddress.IPv6Any, ListenPort))
+        if (!_manager.Start(IPAddress.Parse(ListenAddress), IPAddress.IPv6Any, ListenPort))
         {
             SiteLinkLogger.Info($"{Tag} Failed to start listener!", "Listener");
             return;
@@ -173,11 +175,13 @@ public class Listener : IDisposable
             payload = reader.ReadArraySegmentAndSize()
         };
 
-        if (session.NetworkId == commandMessage.netId && session.Player != null)
+        if (session.NetworkId == commandMessage.netId)
         {
-            using (NetworkReaderPooled commandPayload = NetworkReaderPool.Get(commandMessage.payload))
+            switch (commandMessage.functionHash)
             {
-                session.Player.OnReceiveCommand(commandMessage.componentIndex, commandMessage.functionHash, commandPayload);
+                case NetworkMessages.CharacterClassManager.Commands.ConfirmDisconnect:
+                    session.Disconnect();
+                    break;
             }
         }
 
@@ -341,7 +345,6 @@ public class Listener : IDisposable
         try
         {
             _manager.PollEvents();
-            _manager.ManualUpdate(PoolingDelayMs);
         }
         catch (Exception ex)
         {
@@ -413,8 +416,6 @@ public class Listener : IDisposable
     void OnConnectionRequest(ConnectionRequest request)
     {
         string connectionIpAddress = $"{request.RemoteEndPoint.Address}";
-
-        Console.WriteLine("Connection attempt from " + connectionIpAddress);
 
         DisconnectType response = DisconnectType.Valid;
         bool rejectForce = false;

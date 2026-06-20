@@ -1,5 +1,6 @@
 ﻿using InventorySystem.Items;
 using Mirror;
+using static SiteLink.API.Networking.Components.ServerConfigSynchronizerComponent;
 
 namespace SiteLink.Misc;
 
@@ -14,7 +15,24 @@ public static class ReadWriterInitializer
 
         Writer<PlayerInfoArea>.write = WritePlayerInfoArea;
         Reader<PlayerInfoArea>.read = ReadPlayerInfoArea;
+
+        Writer<PredefinedBanTemplate>.write = WritePredefinedBanTemplate;
+        Writer<AmmoLimit>.write = WriteAmmoLimit;
     }
+
+    public static void WritePredefinedBanTemplate(NetworkWriter writer, PredefinedBanTemplate value)
+    {
+        writer.WriteInt(value.Duration);
+        writer.WriteString(value.FormattedDuration);
+        writer.WriteString(value.Reason);
+    }
+
+    public static void WriteAmmoLimit(NetworkWriter writer, AmmoLimit value)
+    {
+        writer.WriteByte((byte)value.AmmoType);
+        writer.WriteUShort(value.Limit);
+    }
+
 
     // byte
 

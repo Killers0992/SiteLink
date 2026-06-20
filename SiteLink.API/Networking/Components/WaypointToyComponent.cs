@@ -1,3 +1,7 @@
+using Mirror;
+using System;
+using UnityEngine;
+
 namespace SiteLink.API.Networking.Components;
 
 public class WaypointToyComponent : AdminToyBaseComponent
@@ -46,17 +50,6 @@ public class WaypointToyComponent : AdminToyBaseComponent
         // subscribe only once is done by root; here we only attach leaf hooks
     }
 
-    public override void OnSerialize(NetworkWriter writer, bool initialState)
-    {
-        base.OnSerialize(writer, initialState);
-
-        if (initialState)
-        {
-            writer.WriteUInt(0);
-            writer.WriteByte(WaypointId);
-        }
-    }
-
     protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
         base.SerializeSyncVars(writer, forceAll);
@@ -85,6 +78,16 @@ public class WaypointToyComponent : AdminToyBaseComponent
         if ((SyncVarDirtyBits & 128UL) != 0UL)
         {
             writer.WriteVector3(_boundsSize);
+        }
+    }
+
+    public override void OnSerialize(NetworkWriter writer, bool initialState)
+    {
+        base.OnSerialize(writer, initialState);
+
+        if (initialState)
+        {
+            writer.WriteByte(WaypointId);
         }
     }
 }

@@ -10,12 +10,12 @@
 		<Reference Include="Mirror">
 			<HintPath>$(SL_REFERENCES)\Mirror.dll</HintPath>
 		</Reference>
-		<Reference Include="Unity.TextMeshPro">
-		  <HintPath>..\..\..\SteamLibrary\steamapps\common\SCP Secret Laboratory Dedicated Server\SCPSL_Data\Managed\Unity.TextMeshPro.dll</HintPath>
-		</Reference>
 		<Reference Include="UnityEngine.CoreModule">
-		  <HintPath>..\SiteLink\bin\Release\net9.0\UnityEngine.CoreModule.dll</HintPath>
+			<HintPath>$(UNITY_REFERENCES)\UnityEngine.CoreModule.dll</HintPath>
+		</Reference>
+		<Reference Include="Unity.TextMeshPro">
+			<HintPath>$(SL_REFERENCES)\Unity.TextMeshPro.dll</HintPath>
 		</Reference>
 	</ItemGroup>
-	
+
 </Project>

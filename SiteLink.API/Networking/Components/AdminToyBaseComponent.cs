@@ -1,3 +1,7 @@
+using Mirror;
+using UnityEngine;
+using System;
+
 namespace SiteLink.API.Networking.Components;
 
 public class AdminToyBaseComponent : BehaviourComponent
@@ -111,6 +115,16 @@ public class AdminToyBaseComponent : BehaviourComponent
         if ((SyncVarDirtyBits & 16UL) != 0UL)
         {
             writer.WriteBool(_isStatic);
+        }
+    }
+
+    public override void OnSerialize(NetworkWriter writer, bool initialState)
+    {
+        base.OnSerialize(writer, initialState);
+
+        if (initialState)
+        {
+            writer.WriteUInt(0);
         }
     }
 

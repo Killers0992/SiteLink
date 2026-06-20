@@ -1,6 +1,3 @@
-using Mirror;
-using UnityEngine;
-
 namespace PlayerStatsSystem
 {
 	public static class SyncedStatMessages
