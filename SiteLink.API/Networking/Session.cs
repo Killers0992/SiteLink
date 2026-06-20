@@ -63,6 +63,19 @@ namespace SiteLink.API.Networking
         }
 
         private World _world;
+        private bool _isSpawned;
+
+        public bool IsSpawned
+        {
+            get => _isSpawned;
+            set
+            {
+                if (!_isSpawned)
+                    Server?.OnSessionSpawned(this);
+
+                _isSpawned = value;
+            }
+        }
 
         public PlayerObject Player { get; set; }
 
@@ -201,6 +214,15 @@ namespace SiteLink.API.Networking
 
         public DateTime NextRetry { get; set; } = DateTime.MinValue;
 
+        private Server _shutdownRetryServer;
+        private int _shutdownRetryAttempts;
+        private int _shutdownRetryAttemptsMade;
+        private TimeSpan _shutdownRetryInterval;
+        private DateTime _nextShutdownRetry = DateTime.MaxValue;
+        private string _shutdownWaitingMessage;
+        private string _shutdownUnreachableMessage;
+        private bool _shutdownRetryFinished;
+
         public uint NetworkId { get; private set; }
         public string Nickname { get; private set; }
         public string UserId { get; private set; }
@@ -262,7 +284,6 @@ namespace SiteLink.API.Networking
                     SendToServer(bytes, offset, length, method);
                 });
 
-            _serverToClient.Register(NetworkMessages.RoleSyncInfo, OnRoleSync);
             _serverToClient.Register(NetworkMessages.SeedMessage, OnReceiveSeed);
             _serverToClient.Register(NetworkMessages.NetworkPingMessage, OnPing);
             _serverToClient.Register(NetworkMessages.SpawnMessage, OnSpawn);
@@ -305,17 +326,6 @@ namespace SiteLink.API.Networking
                     session.Player = new PlayerObject(null, session, networkId);
                     break;
             }
-
-            return InterceptResult.Pass();
-        }
-
-        private InterceptResult OnRoleSync(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
-        {
-            uint playerId = reader.ReadUInt();
-            RoleTypeId role = reader.ReadRoleType();
-
-            if (playerId == session.NetworkId)
-                session?.Server.OnSessionSpawned(session, role);
 
             return InterceptResult.Pass();
         }
@@ -454,6 +464,8 @@ namespace SiteLink.API.Networking
             _netManager?.PollEvents();
             AsClient?.Update();
 
+            UpdateShutdownRetry();
+
             if (ConnectingToServer == null && ConnectToServers != null && ConnectToServers.Count > 0)
             {
                 ConnectingToServer = ConnectToServers.Dequeue();
@@ -520,7 +532,7 @@ namespace SiteLink.API.Networking
 
                 // Happens during server shutdown.
                 case DisconnectReason.RemoteConnectionClose:
-                    TryConnectToFallbackServersAfterShutdown();
+                    BeginShutdownRecovery();
                     return;
 
                 case DisconnectReason.Timeout:
@@ -589,68 +601,179 @@ namespace SiteLink.API.Networking
             Disconnect();
         }
 
-        private void TryConnectToFallbackServersAfterShutdown()
+        private void BeginShutdownRecovery()
         {
             Server shutdownServer = Server;
-            string shutdownMessage = $"[SiteLink]\nServer {shutdownServer.Name} shutdown...";
-            RemoteConnection connection = Connection;
 
-            if (connection == null)
+            if (shutdownServer == null || Connection == null)
                 return;
 
-            Server[] fallbackServers = (shutdownServer.Settings?.FallbackServers ?? Array.Empty<string>())
+            ConfigureShutdownRetry(shutdownServer);
+            ShowShutdownRetryStatus();
+
+            SiteLinkLogger.Info(
+                $"{Connection.Tag} Server (f=yellow){shutdownServer.Name}(f=white) shut down; " +
+                $"retrying (f=yellow){_shutdownRetryAttempts}(f=white) time(s) every " +
+                $"(f=yellow){_shutdownRetryInterval.TotalSeconds:0.##}(f=white) second(s) before trying fallbacks."
+            );
+
+            if (_shutdownRetryAttempts == 0)
+            {
+                _nextShutdownRetry = DateTime.UtcNow;
+            }
+        }
+
+        private void TryFallbackServersAfterShutdown()
+        {
+            _shutdownRetryFinished = true;
+            string unreachableMessage = FormatShutdownRetryMessage(_shutdownUnreachableMessage);
+
+            Server[] fallbackServers = (_shutdownRetryServer.Settings?.FallbackServers ?? Array.Empty<string>())
                 .Select(name => SiteLink.API.Core.Server.Get<Server>(name: name))
-                .Where(server => server != null && server != shutdownServer)
+                .Where(server => server != null && server != _shutdownRetryServer)
                 .Distinct()
                 .ToArray();
 
-            if (fallbackServers.Length == 0)
+            Connection?.AsServer.Hint(unreachableMessage, 8f);
+
+            if (fallbackServers.Length == 0 || Connection == null)
             {
-                Disconnect(shutdownMessage);
+                Disconnect(unreachableMessage);
                 return;
             }
 
             Session fallbackSession = SessionManager.Singleton.CreateOrSwitchSession(
-                connection,
+                Connection,
                 fallbackServers,
                 silent: true
             );
 
             if (fallbackSession == null)
             {
-                Disconnect(shutdownMessage);
+                Disconnect(unreachableMessage);
                 return;
             }
 
-            bool failureHandled = false;
+            bool disconnected = false;
 
-            void DisconnectIfFallbackFailed()
+            void DisconnectAfterFinalFallbackFailure()
             {
-                if (failureHandled)
+                if (disconnected)
                     return;
 
-                failureHandled = true;
-                Disconnect(shutdownMessage);
+                disconnected = true;
+                Disconnect(unreachableMessage);
             }
 
             fallbackSession.OnServerOffline += response =>
             {
                 if (response.IsFinalResponse)
-                    DisconnectIfFallbackFailed();
+                    DisconnectAfterFinalFallbackFailure();
             };
 
             fallbackSession.OnServerFull += response =>
             {
                 if (response.IsFinalResponse)
-                    DisconnectIfFallbackFailed();
+                    DisconnectAfterFinalFallbackFailure();
             };
 
-            fallbackSession.OnBanned += _ => DisconnectIfFallbackFailed();
+            fallbackSession.OnBanned += _ => DisconnectAfterFinalFallbackFailure();
 
             SiteLinkLogger.Info(
-                $"{connection.Tag} Server (f=yellow){shutdownServer.Name}(f=white) shut down; trying fallback servers: " +
+                $"{Connection.Tag} Server (f=yellow){_shutdownRetryServer.Name}(f=white) did not recover; trying fallback servers: " +
                 $"(f=yellow){string.Join("(f=white) -> (f=yellow)", fallbackServers.Select(server => server.Name))}(f=white)"
             );
+        }
+
+        private void ConfigureShutdownRetry(Server shutdownServer)
+        {
+            ServerSettings settings = shutdownServer.Settings;
+
+            _shutdownRetryServer = shutdownServer;
+            _shutdownRetryAttempts = Math.Max(0, settings?.ShutdownRetryAttempts ?? 0);
+            _shutdownRetryAttemptsMade = 0;
+            _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.ShutdownRetryInterval ?? 10f));
+            _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
+            _shutdownWaitingMessage = settings?.ShutdownWaitingMessage;
+            _shutdownUnreachableMessage = settings?.ShutdownUnreachableMessage;
+            _shutdownRetryFinished = _shutdownRetryAttempts == 0;
+        }
+
+        private void ShowShutdownRetryStatus()
+        {
+            if (_shutdownRetryServer == null || _shutdownRetryFinished)
+                return;
+
+            Connection?.AsServer.Hint(
+                FormatShutdownRetryMessage(_shutdownWaitingMessage),
+                Math.Max(3f, (float)_shutdownRetryInterval.TotalSeconds + 0.5f)
+            );
+        }
+
+        private void UpdateShutdownRetry()
+        {
+            if (_shutdownRetryServer == null || _shutdownRetryFinished || Status != SessionStatus.Connected)
+                return;
+
+            if (_nextShutdownRetry > DateTime.UtcNow)
+                return;
+
+            if (SessionManager.Singleton.Slots.TryGetValue(UserId, out SessionSlot slot) && slot.Pending != null)
+                return;
+
+            if (_shutdownRetryAttemptsMade >= _shutdownRetryAttempts)
+            {
+                TryFallbackServersAfterShutdown();
+                return;
+            }
+
+            Session retrySession = SessionManager.Singleton.CreateOrSwitchSession(
+                Connection,
+                new[] { _shutdownRetryServer },
+                silent: true
+            );
+
+            if (retrySession == null)
+            {
+                _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
+                return;
+            }
+
+            _shutdownRetryAttemptsMade++;
+            _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
+
+            ShowShutdownRetryStatus();
+
+            void FinishImmediatelyAfterLastFailure()
+            {
+                if (_shutdownRetryAttemptsMade >= _shutdownRetryAttempts)
+                    _nextShutdownRetry = DateTime.UtcNow;
+            }
+
+            retrySession.OnServerOffline += response =>
+            {
+                if (response.IsFinalResponse)
+                    FinishImmediatelyAfterLastFailure();
+            };
+
+            retrySession.OnServerFull += response =>
+            {
+                if (response.IsFinalResponse)
+                    FinishImmediatelyAfterLastFailure();
+            };
+
+            retrySession.OnBanned += _ => FinishImmediatelyAfterLastFailure();
+        }
+
+        private string FormatShutdownRetryMessage(string message)
+        {
+            message ??= string.Empty;
+
+            return message
+                .Replace("{server}", _shutdownRetryServer?.DisplayName ?? string.Empty)
+                .Replace("{server_name}", _shutdownRetryServer?.Name ?? string.Empty)
+                .Replace("{attempts}", _shutdownRetryAttempts.ToString())
+                .Replace("{interval}", _shutdownRetryInterval.TotalSeconds.ToString("0.##"));
         }
 
         private void OnReceiveDataFromServer(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)

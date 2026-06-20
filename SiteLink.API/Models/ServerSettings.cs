@@ -52,6 +52,33 @@ public class ServerSettings
     public string[] FallbackServers { get; set; } = Array.Empty<string>();
 
     /// <summary>
+    /// Number of times SiteLink should try to reconnect a player to this server after it shuts down,
+    /// before attempting the configured fallback servers.
+    /// </summary>
+    [Description("Number of reconnect attempts after this server shuts down, before attempting fallback servers. Set to 0 to try fallbacks immediately.")]
+    public int ShutdownRetryAttempts { get; set; } = 5;
+
+    /// <summary>
+    /// Delay between reconnect attempts after this server shuts down.
+    /// </summary>
+    [Description("Seconds between reconnect attempts after this server shuts down.")]
+    public float ShutdownRetryInterval { get; set; } = 10f;
+
+    /// <summary>
+    /// Message shown while the player remains connected to the proxy and waits for this server to return.
+    /// </summary>
+    [Description("Hint shown while waiting for a shut down server. Supports {server}, {server_name}, {attempts}, and {interval}.")]
+    public string ShutdownWaitingMessage { get; set; } =
+        "[SiteLink]\nServer {server} shutdown, waiting for server to be online...";
+
+    /// <summary>
+    /// Message shown when all reconnect attempts have failed.
+    /// </summary>
+    [Description("Hint shown after all shutdown reconnect attempts fail. Supports {server}, {server_name}, {attempts}, and {interval}.")]
+    public string ShutdownUnreachableMessage { get; set; } =
+        "[SiteLink]\nServer {server} is not reachable!";
+
+    /// <summary>
     /// Gets or sets the configuration settings for the bridge.
     /// </summary>
     [Description("If server uses Bridge plugin then configure it below. ( this allows you to communicate between labapi plugins <-> sitelink plugins )")]

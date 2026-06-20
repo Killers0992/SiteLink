@@ -40,10 +40,8 @@ public class RemoteServer : Server
 
     public RemoteServer(string name) : base(name) { }
 
-    public override void OnSessionSpawned(Session session, RoleTypeId role)
+    public override void OnSessionSpawned(Session session)
     {
-        SiteLinkLogger.Info("Session " + session.UserId + " spawned as " + role);
-
         //session.Connection?.AsServer.ServerSpecificEntries(ServerSettings);
     }
 

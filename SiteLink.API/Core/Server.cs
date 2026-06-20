@@ -159,7 +159,7 @@ public class Server
 
     internal void InternalSessionReady(Session session) => OnSessionReady(session);
 
-    public virtual void OnSessionSpawned(Session session, RoleTypeId role) { }
+    public virtual void OnSessionSpawned(Session session) { }
 
     public virtual bool OnSessionConnecting(Session session) => false;
 

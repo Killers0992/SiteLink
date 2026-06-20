@@ -156,7 +156,7 @@ public class Listener : IDisposable
 
         EventManager.Listener.InvokeListenerRegistered(new ListenerRegisteredEvent(this));
 
-        ClientToServer.Register(NetworkMessages.AddPlayerMessage, OnAddPlayer);
+        ClientToServer.Register(NetworkMessages.AttachmentsSetupPreference, OnAddPlayer);
         ClientToServer.Register(NetworkMessages.ReadyMessage, OnReady);
         ClientToServer.Register(NetworkMessages.SSSClientResponse, OnSSSClientResponse);
         ClientToServer.Register(NetworkMessages.FpcFromClientMessage, OnPosition);
@@ -213,6 +213,8 @@ public class Listener : IDisposable
 
     static InterceptResult OnPosition(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
     {
+        session.IsSpawned = true;
+
         if (!session.Server?.IsSimulated ?? true)
             return InterceptResult.Pass();
 
