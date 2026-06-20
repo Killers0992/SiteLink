@@ -113,12 +113,6 @@ namespace SiteLink.API.Networking
         public bool IsSilent { get; }
 
         // Position System
-
-        /// <summary>
-        /// Gets the waypoint ID associated with this client.
-        /// </summary>
-        public byte WaypointId { get; internal set; }
-
         /// <summary>
         /// Current horizontal rotation.
         /// </summary>
@@ -151,7 +145,7 @@ namespace SiteLink.API.Networking
                 if (World == null)
                     return Vector3.zero;
 
-                if (World.Waypoints.TryGetValue(WaypointId, out WaypointToyObject obj))
+                if (World.Waypoints.TryGetValue(RelativePosition.WaypointId, out WaypointToyObject obj))
                     return obj.Position + RelativePosition.Relative;
 
                 return Vector3.zero;
