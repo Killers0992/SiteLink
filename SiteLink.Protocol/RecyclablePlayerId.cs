@@ -6,6 +6,7 @@ public struct RecyclablePlayerId : IEquatable<RecyclablePlayerId>
 	private const int MinQueue = 16;
 
 	private static readonly Queue<int> FreeIds = new Queue<int> ();
+	private static readonly object SyncRoot = new object();
 
 	private static int _autoIncrement;
 
@@ -18,15 +19,20 @@ public struct RecyclablePlayerId : IEquatable<RecyclablePlayerId>
 
 	public RecyclablePlayerId (bool useMinQueue)
 	{
-		int num = (useMinQueue ? 16 : 0);
-		int value = ((FreeIds.Count >= num) ? FreeIds.Dequeue () : (++_autoIncrement));
-		Value = value;
+		lock (SyncRoot) {
+			int minimumQueueSize = useMinQueue ? MinQueue : 1;
+			Value = FreeIds.Count >= minimumQueueSize
+				? FreeIds.Dequeue()
+				: ++_autoIncrement;
+		}
 	}
 
 	public void Destroy ()
 	{
 		if (Value != 0) {
-			FreeIds.Enqueue (Value);
+			lock (SyncRoot) {
+				FreeIds.Enqueue (Value);
+			}
 		}
 	}
 

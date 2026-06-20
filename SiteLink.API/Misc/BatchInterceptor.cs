@@ -6,14 +6,23 @@
     {
         public PacketDirection Direction { get; }
 
-        private readonly MessageHandler?[] _handlers = new MessageHandler?[ushort.MaxValue + 1];
+        private readonly List<MessageHandler>?[] _handlers = new List<MessageHandler>?[ushort.MaxValue + 1];
 
         public BatchInterceptor(PacketDirection direction)
         {
             Direction = direction;
         }
 
-        public void Register(ushort id, MessageHandler handler) => _handlers[id] = handler;
+        public void Register(ushort id, MessageHandler handler)
+        {
+            List<MessageHandler> handlers = _handlers[id] ??= new List<MessageHandler>();
+
+            lock (handlers)
+            {
+                if (!handlers.Contains(handler))
+                    handlers.Add(handler);
+            }
+        }
 
         private static string FormatBytes(long bytes)
         {
@@ -78,15 +87,31 @@
                         break;
                 }*/
 
-                var h = _handlers[id];
-                if (h == null)
+                List<MessageHandler> handlers = _handlers[id];
+                if (handlers == null)
                 {
                     kept ??= new(16);
                     kept.Add(msg);
                     continue;
                 }
 
-                var res = h(id, mr, msg, session);
+                MessageHandler[] handlersSnapshot;
+                lock (handlers)
+                    handlersSnapshot = handlers.ToArray();
+
+                InterceptResult res = InterceptResult.Pass();
+
+                foreach (MessageHandler handler in handlersSnapshot)
+                {
+                    NetworkReader handlerReader = new NetworkReader(msg);
+                    if (!Mirror.NetworkMessages.UnpackId(handlerReader, out _))
+                        continue;
+
+                    res = handler(id, handlerReader, msg, session);
+
+                    if (res.Decision != InterceptDecision.Pass)
+                        break;
+                }
 
                 switch (res.Decision)
                 {

@@ -1,5 +1,7 @@
-﻿using SiteLink.API.Events;
+﻿using RelativePositioning;
+using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
+using Extensions = SiteLink.API.Misc.Extensions;
 
 namespace SiteLink.API.Core;
 
@@ -216,11 +218,38 @@ public class World : IDisposable
             _sessionsLock.ExitWriteLock();
         }
 
+        SpawnOwnedObjectsForExistingSessions(session);
         SpawnObjectsForSession(session);
 
         EventManager.Client.InvokeLoadedWorld(new SessionLoadedWorldEvent(session, this));
 
         return result;
+    }
+
+    private void SpawnOwnedObjectsForExistingSessions(Session owner)
+    {
+        NetworkObject[] ownedObjects;
+
+        _objectsLock.EnterReadLock();
+        try
+        {
+            ownedObjects = Objects.Values
+                .Where(obj => obj.Owner == owner)
+                .ToArray();
+        }
+        finally
+        {
+            _objectsLock.ExitReadLock();
+        }
+
+        foreach (Session observer in GetClientsSnapshot())
+        {
+            if (observer == owner || observer.Connection == null)
+                continue;
+
+            foreach (NetworkObject obj in ownedObjects)
+                obj.SpawnWithPayload(observer);
+        }
     }
 
     /// <summary>
@@ -279,27 +308,114 @@ public class World : IDisposable
 
     public void DestroyObjectsForSession(Session session, World targetWorld)
     {
+        NetworkObject[] objects;
+
         _objectsLock.EnterReadLock();
         try
         {
-            foreach (var obj in Objects)
-            {
-                if (obj.Value is PlayerObject pObject)
-                {
-                    pObject.MoveToWorld(targetWorld);
-
-                    if (targetWorld == null)
-                        pObject.Owner.Player = null;
-                }
-                else
-                    obj.Value.Destroy(session);
-            }
+            objects = Objects.Values.ToArray();
         }
         finally
         {
             _objectsLock.ExitReadLock();
         }
+
+        foreach (NetworkObject obj in objects)
+        {
+            if (obj is not PlayerObject player)
+            {
+                obj.Destroy(session);
+                continue;
+            }
+
+            if (player.Owner != session)
+            {
+                player.Destroy(session);
+                continue;
+            }
+
+            foreach (Session observer in player.Observers.ToArray())
+                player.Destroy(observer);
+
+            if (targetWorld != null)
+            {
+                player.MoveToWorld(targetWorld);
+            }
+            else
+            {
+                player.Dispose();
+                session.Player = null;
+            }
+        }
     }
+
+    public void SendFpcPositions()
+    {
+        Session[] players = GetClientsSnapshot()
+            .Where(session => session.Player != null && session.IsSpawned)
+            .ToArray();
+
+        foreach (Session receiver in players)
+        {
+            if (receiver.Connection == null)
+                continue;
+
+            Session[] visiblePlayers = players
+                .Where(player => player != receiver &&
+                                 player.Player.Observers.Contains(receiver) &&
+                                 player.Player.ReferenceHub.PlayerId.Value != 0)
+                .ToArray();
+
+            receiver.Connection.AsServer.Send(writer =>
+            {
+                writer.WriteUShort(NetworkMessages.FpcPositionMessage);
+                writer.WriteUShort((ushort)visiblePlayers.Length);
+
+                foreach (Session player in visiblePlayers)
+                {
+                    writer.WriteRecyclablePlayerId(player.Player.ReferenceHub.PlayerId);
+
+                    byte movementState = (byte)player.MovementState;
+
+                    movementState.ByteToBools(
+                        out bool b1,
+                        out bool b2,
+                        out bool b3,
+                        out bool b4,
+                        out bool b5,
+                        out _,
+                        out _,
+                        out _);
+
+                    byte state = Extensions.BoolsToByte(
+                        b1,
+                        b2,
+                        b3,
+                        b4,
+                        b5,
+                        player.HasFpcMouseLook,
+                        player.HasFpcPosition,
+                        player.HasFpcCustomData);
+
+                    writer.WriteByte(state);
+
+                    if (player.HasFpcPosition)
+                    {
+                        writer.WriteRelativePosition(player.RelativePosition);
+                    }
+
+                    if (player.HasFpcMouseLook)
+                    {
+                        writer.WriteUShort(player.HorizontalRotationRaw);
+                        writer.WriteUShort(player.VerticalRotationRaw);
+                    }
+                }
+            });
+        }
+    }
+
+    private static short CompressRelativePosition(float value) =>
+        (short)Mathf.Clamp(Mathf.RoundToInt(value * 256f), short.MinValue, short.MaxValue);
 
     /// <summary>
     /// Returns a thread-local snapshot of the current clients. The snapshot is reused for the same thread if the list hasn't changed.

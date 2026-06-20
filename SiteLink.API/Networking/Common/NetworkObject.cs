@@ -52,6 +52,7 @@ public class NetworkObject : IDisposable
 
         world.Objects.Add(NetworkId, this);
         World = world;
+        Observers.Clear();
     }
 
     public void SendUpdate(Session client)
@@ -183,6 +184,7 @@ public class NetworkObject : IDisposable
         }
 
         client.Connection.AsServer.Destroy(NetworkId);
+        Observers.Remove(client);
     }
 
     public void Destroy()
@@ -201,6 +203,9 @@ public class NetworkObject : IDisposable
 
     public void Spawn(Session client, ArraySegment<byte> payload = default)
     {
+        if (Observers.Contains(client))
+            return;
+
         client.Connection.AsServer.Spawn(
             NetworkId,
             Owner == client,
@@ -228,6 +233,11 @@ public class NetworkObject : IDisposable
     public void Dispose()
     {
         World.Objects.Remove(NetworkId);
+
+        if (this is PlayerObject player)
+            player.ReferenceHub.PlayerId.Destroy();
+
+        Observers.Clear();
         Owner = null;
     }
 }

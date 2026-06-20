@@ -1,11 +1,14 @@
 using System;
 using Mirror;
+using UnityEngine;
 
 namespace RelativePositioning
 {
 	public struct RelativePosition : NetworkMessage, IEquatable<RelativePosition>
-	{
-		public readonly short PositionX;
+    {
+        private static readonly float InverseAccuracy = 0.00390625f;
+
+        public readonly short PositionX;
 
 		public readonly short PositionY;
 
@@ -13,7 +16,17 @@ namespace RelativePositioning
 
 		public readonly byte WaypointId;
 
-		public RelativePosition (NetworkReader reader)
+        public bool OutOfRange;
+
+        public Vector3 Relative
+        {
+            get
+            {
+                return new Vector3(PositionX * RelativePosition.InverseAccuracy, PositionY * RelativePosition.InverseAccuracy, PositionZ * RelativePosition.InverseAccuracy);
+            }
+        }
+
+        public RelativePosition (NetworkReader reader)
 		{
 			WaypointId = reader.ReadByte ();
 			if (WaypointId > 0) {
@@ -25,32 +38,31 @@ namespace RelativePositioning
 				PositionY = 0;
 				PositionZ = 0;
 			}
-			//OutOfRange = false;
+
+			OutOfRange = false;
 		}
 
-		public void Write (NetworkWriter writer)
+        public RelativePosition(byte waypoint, short x, short y, short z, bool outOfRange)
+        {
+            WaypointId = waypoint;
+
+            PositionX = x;
+            PositionY = y;
+            PositionZ = z;
+
+            OutOfRange = outOfRange;
+        }
+
+        public void Write (NetworkWriter writer)
 		{
 			writer.WriteByte (WaypointId);
-			if (WaypointId > 0) {
+
+			if (WaypointId > 0) 
+			{
 				writer.WriteShort (PositionX);
 				writer.WriteShort (PositionY);
 				writer.WriteShort (PositionZ);
 			}
-		}
-
-		private static bool TryCompressPosition (float pos, out short compressed)
-		{
-			float num = pos * 256f;
-			if (num < -32768f) {
-				compressed = short.MinValue;
-				return false;
-			}
-			if (num > 32767f) {
-				compressed = short.MaxValue;
-				return false;
-			}
-			compressed = (short)num;
-			return true;
 		}
 
 		public bool Equals (RelativePosition other)

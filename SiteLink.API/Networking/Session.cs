@@ -1,4 +1,5 @@
 ﻿using PlayerRoles;
+using RelativePositioning;
 using SiteLink.API.Metrics;
 using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
@@ -128,10 +129,17 @@ namespace SiteLink.API.Networking
         /// </summary>
         public float VerticalRotation { get; internal set; }
 
+        public PlayerMovementState MovementState { get; internal set; }
+        internal bool HasFpcPosition;
+        internal bool HasFpcMouseLook;
+        internal bool HasFpcCustomData;
+        internal ushort HorizontalRotationRaw { get; set; }
+        internal ushort VerticalRotationRaw { get; set; }
+
         /// <summary>
         /// Gets the current relative position of the client.
         /// </summary>
-        public Vector3 RelativePosition { get; internal set; }
+        public RelativePosition RelativePosition { get; internal set; }
 
         /// <summary>
         /// Gets the absolute position of the client in the world.
@@ -144,7 +152,7 @@ namespace SiteLink.API.Networking
                     return Vector3.zero;
 
                 if (World.Waypoints.TryGetValue(WaypointId, out WaypointToyObject obj))
-                    return obj.Position + RelativePosition;
+                    return obj.Position + RelativePosition.Relative;
 
                 return Vector3.zero;
             }
@@ -224,7 +232,7 @@ namespace SiteLink.API.Networking
         private bool _shutdownRetryFinished;
 
         public uint NetworkId { get; private set; }
-        public string Nickname { get; private set; }
+        public string Nickname { get; set; }
         public string UserId { get; private set; }
 
         public int MapSeed { get; private set; } = -1;
@@ -354,6 +362,7 @@ namespace SiteLink.API.Networking
 
             Player = new PlayerObject(World);
             Player.AssignOwner(this);
+            Player.ReferenceHub.PlayerId = new RecyclablePlayerId(false);
 
             Player.Position = pos;
 

@@ -3,6 +3,7 @@
 public static class PluginsManager
 {
     private static IServiceCollection _serviceCollection;
+    private static bool _resolverRegistered;
 
     public static string PluginsPath => Path.Combine("Plugins");
     public static string DependenciesPath => Path.Combine("Dependencies");
@@ -22,12 +23,12 @@ public static class PluginsManager
         if (!Directory.Exists(DependenciesPath))
             Directory.CreateDirectory(DependenciesPath);
 
+        RegisterAssemblyResolver();
         LoadDependencies();
 
         var assemblies = LoadAssemblies(PluginsPath);
-        LoadPlugins(assemblies);
-
-        AppDomain.CurrentDomain.AssemblyResolve += OnResolveAssembly;
+        RegisterAssemblies(assemblies);
+        LoadPlugins(OrderByDependencies(assemblies));
     }
 
     public static List<Assembly> LoadAssemblies(string folder)
@@ -52,6 +53,64 @@ public static class PluginsManager
         }
 
         return assemblies;
+    }
+
+    private static void RegisterAssemblyResolver()
+    {
+        if (_resolverRegistered)
+            return;
+
+        AppDomain.CurrentDomain.AssemblyResolve += OnResolveAssembly;
+        _resolverRegistered = true;
+    }
+
+    private static void RegisterAssemblies(IEnumerable<Assembly> assemblies)
+    {
+        foreach (Assembly assembly in assemblies)
+        {
+            AssemblyName name = assembly.GetName();
+
+            if (!string.IsNullOrEmpty(assembly.FullName))
+                NameToAssembly[assembly.FullName] = assembly;
+
+            if (!string.IsNullOrEmpty(name.Name))
+                NameToAssembly[name.Name] = assembly;
+        }
+    }
+
+    private static List<Assembly> OrderByDependencies(List<Assembly> assemblies)
+    {
+        Dictionary<string, Assembly> pluginsByName = assemblies
+            .Where(assembly => !string.IsNullOrEmpty(assembly.GetName().Name))
+            .ToDictionary(assembly => assembly.GetName().Name, StringComparer.OrdinalIgnoreCase);
+
+        List<Assembly> ordered = new(assemblies.Count);
+        HashSet<Assembly> visiting = new();
+        HashSet<Assembly> visited = new();
+
+        void Visit(Assembly assembly)
+        {
+            if (visited.Contains(assembly))
+                return;
+
+            if (!visiting.Add(assembly))
+                return;
+
+            foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
+            {
+                if (reference.Name != null && pluginsByName.TryGetValue(reference.Name, out Assembly dependency))
+                    Visit(dependency);
+            }
+
+            visiting.Remove(assembly);
+            visited.Add(assembly);
+            ordered.Add(assembly);
+        }
+
+        foreach (Assembly assembly in assemblies)
+            Visit(assembly);
+
+        return ordered;
     }
 
     public static void LoadDependencies()
@@ -127,8 +186,6 @@ public static class PluginsManager
                 continue;
             }
 
-            NameToAssembly.Add(assembly.FullName, assembly);
-
             if (!Load(plugin, out Exception ex))
             {
                 SiteLinkLogger.Error($"[(f=yellow){current}(f=red)/(f=yellow){assemblies.Count}(f=red)] Plugin '(f=yellow){plugin.Name}(f=red)' failed to load!\n{ex}", "PluginsManager");
@@ -164,6 +221,10 @@ public static class PluginsManager
     private static Assembly OnResolveAssembly(object sender, ResolveEventArgs args)
     {
         if (NameToAssembly.TryGetValue(args.Name, out Assembly assembly))
+            return assembly;
+
+        string name = new AssemblyName(args.Name).Name;
+        if (!string.IsNullOrEmpty(name) && NameToAssembly.TryGetValue(name, out assembly))
             return assembly;
 
         return null;

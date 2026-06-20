@@ -226,4 +226,20 @@ public static class Extensions
         bool7 = ((b & 64) == 64);
         bool8 = ((b & 128) == 128);
     }
+
+    public static byte BoolsToByte(bool bool1, bool bool2, bool bool3, bool bool4, bool bool5, bool bool6, bool bool7, bool bool8)
+    {
+        byte value = 0;
+
+        if (bool1) value |= 1;
+        if (bool2) value |= 2;
+        if (bool3) value |= 4;
+        if (bool4) value |= 8;
+        if (bool5) value |= 16;
+        if (bool6) value |= 32;
+        if (bool7) value |= 64;
+        if (bool8) value |= 128;
+
+        return value;
+    }
 }

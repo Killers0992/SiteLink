@@ -1,9 +1,11 @@
-﻿using SiteLink.API.Events;
+﻿using RelativePositioning;
+using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Metrics;
 using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 using System.Buffers;
+using Extensions = SiteLink.API.Misc.Extensions;
 
 namespace SiteLink.API.Networking;
 
@@ -161,6 +163,51 @@ public class Listener : IDisposable
         ClientToServer.Register(NetworkMessages.SSSClientResponse, OnSSSClientResponse);
         ClientToServer.Register(NetworkMessages.FpcFromClientMessage, OnPosition);
         ClientToServer.Register(NetworkMessages.CommandMessage, OnCommand);
+        ClientToServer.Register(NetworkMessages.VoiceMessage, OnVoiceMessage);
+    }
+
+    private static InterceptResult OnVoiceMessage(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
+    {
+        if (session.Server?.IsSimulated != true || session.World == null || session.Player == null)
+            return InterceptResult.Pass();
+
+        if (reader.Remaining < sizeof(byte) + sizeof(byte) + sizeof(ushort))
+            return InterceptResult.Drop();
+
+        int speakerId = reader.ReadRecyclablePlayerId().Value;
+        byte channel = reader.ReadByte();
+        ushort dataLength = reader.ReadUShort();
+
+        if (speakerId == 0 ||
+            speakerId != session.Player.ReferenceHub.PlayerId.Value ||
+            dataLength == 0 ||
+            dataLength > reader.Remaining)
+        {
+            return InterceptResult.Drop();
+        }
+
+        ArraySegment<byte> voiceData = reader.ReadBytesSegment(dataLength);
+
+        foreach (Session receiver in session.Player.Observers.ToArray())
+        {
+            if (receiver == session ||
+                receiver.World != session.World ||
+                receiver.Connection == null)
+            {
+                continue;
+            }
+
+            receiver.Connection.AsServer.Send(writer =>
+            {
+                writer.WriteUShort(NetworkMessages.VoiceMessage);
+                writer.WriteRecyclablePlayerId(session.Player.ReferenceHub.PlayerId);
+                writer.WriteByte(channel);
+                writer.WriteUShort(dataLength);
+                writer.WriteBytes(voiceData.Array, voiceData.Offset, voiceData.Count);
+            });
+        }
+
+        return InterceptResult.Drop();
     }
 
     private InterceptResult OnCommand(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
@@ -179,6 +226,9 @@ public class Listener : IDisposable
             {
                 case NetworkMessages.CharacterClassManager.Commands.ConfirmDisconnect:
                     session.Disconnect();
+                    break;
+                default:
+                    session.Player.OnReceiveCommand(commandMessage.componentIndex, commandMessage.functionHash, new NetworkReader(commandMessage.payload));
                     break;
             }
         }
@@ -220,45 +270,28 @@ public class Listener : IDisposable
 
         byte code = r.ReadByte();
 
-        bool _bitMouseLook = false;
-        bool _bitPosition = false;
-        bool _bitCustom = false;
-
         ushort _rotH, _rotV;
 
-        code.ByteToBools(out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
+        code.ByteToBools(out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out session.HasFpcMouseLook, out session.HasFpcPosition, out session.HasFpcCustomData);
 
-        if (_bitPosition)
-        {
-            byte waypointId = r.ReadByte();
+        session.MovementState = (PlayerMovementState) Extensions.BoolsToByte(b1, b2, b3, b4, b5, false, false, false);
 
-            short PositionX, PositionY, PositionZ;
-            if (waypointId > 0)
-            {
-                PositionX = r.ReadShort();
-                PositionY = r.ReadShort();
-                PositionZ = r.ReadShort();
+        if (session.HasFpcPosition)
+            session.RelativePosition = r.ReadRelativePosition();
 
-                session.WaypointId = waypointId;
-                session.RelativePosition = new Vector3(PositionX * InverseAccuracy, PositionY * InverseAccuracy, PositionZ * InverseAccuracy);
-            }
-            else
-            {
-                PositionX = 0;
-                PositionY = 0;
-                PositionZ = 0;
-            }
-        }
-
-        if (_bitMouseLook)
+        if (session.HasFpcMouseLook)
         {
             _rotH = r.ReadUShort();
             _rotV = r.ReadUShort();
+
+            session.HorizontalRotationRaw = _rotH;
+            session.VerticalRotationRaw = _rotV;
         }
         else
         {
             _rotH = 0;
             _rotV = 0;
+            session.HasFpcMouseLook = false;
         }
 
         session.HorizontalRotation = Mathf.Lerp(0, 360, _rotH / (float)ushort.MaxValue);

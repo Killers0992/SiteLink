@@ -74,6 +74,20 @@ public class NicknameSyncComponent : BehaviourComponent
         //
     }
 
+    public override bool OnReceiveCommand(ushort functionHash, NetworkReader reader)
+    {
+        switch (functionHash)
+        {
+            case NetworkMessages.NicknameSync.Commands.SetNick:
+
+                MyNickSync = reader.ReadString();
+                Object.SendUpdate();
+                return false;
+        }
+
+        return base.OnReceiveCommand(functionHash, reader);
+    }
+
     protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
         base.SerializeSyncVars(writer, forceAll);
