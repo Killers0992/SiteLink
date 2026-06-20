@@ -1,20 +1,14 @@
-﻿using Mirror;
-using Org.BouncyCastle.Asn1.Crmf;
-using Org.BouncyCastle.Asn1.Ocsp;
-using PlayerRoles.FirstPersonControl;
-using RelativePositioning;
-using SiteLink.API.Events;
+﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Metrics;
 using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 using System.Buffers;
-using UserSettings.ServerSpecific;
 
 namespace SiteLink.API.Networking;
 
 public class Listener : IDisposable
-{        
+{
     /// <summary>
     /// The inverse accuracy constant for position calculations.
     /// </summary>
@@ -128,19 +122,28 @@ public class Listener : IDisposable
         _listener.NetworkReceiveEvent += OnNetworkReceive;
         _listener.PeerDisconnectedEvent += OnPeerDisconnected;
 
+        _listener.NetworkErrorEvent += (endPoint, socketError) =>
+        {
+            SiteLinkLogger.Error($"{Tag} Network error from {endPoint}: {socketError}");
+        };
+
+        SiteLinkLogger.Info("Listener initialized");
+
         _manager = new NetManager(_listener)
         {
-            UpdateTime = 5,
+            // Server only.
             BroadcastReceiveEnabled = true,
-            ChannelsCount = (byte)6,
-            DisconnectTimeout = 6000,
-            ReconnectDelay = 400,
-            MaxConnectAttempts = 2,
+
+            UpdateTime = NetSettings.UpdateTime,
+            ChannelsCount = NetSettings.ChannelsCount,
+            DisconnectTimeout = NetSettings.SessionDisconnectTimeout,
+            ReconnectDelay = NetSettings.SessionReconnectDelay,
+            MaxConnectAttempts = NetSettings.SessionMaxConnectAttempts,
         };
 
         ListenersByName.TryAdd(Name, this);
 
-        if (!_manager.StartInManualMode(IPAddress.Parse(ListenAddress), IPAddress.IPv6Any, ListenPort))
+        if (!_manager.Start(IPAddress.Parse(ListenAddress), IPAddress.IPv6Any, ListenPort))
         {
             SiteLinkLogger.Info($"{Tag} Failed to start listener!", "Listener");
             return;
@@ -167,16 +170,18 @@ public class Listener : IDisposable
         CommandMessage commandMessage = new CommandMessage
         {
             netId = reader.ReadUInt(),
-		    componentIndex = reader.ReadByte(),
-		    functionHash = reader.ReadUShort(),
-		    payload = reader.ReadArraySegmentAndSize()
+            componentIndex = reader.ReadByte(),
+            functionHash = reader.ReadUShort(),
+            payload = reader.ReadArraySegmentAndSize()
         };
 
-        if (session.NetworkId == commandMessage.netId && session.Player != null)
+        if (session.NetworkId == commandMessage.netId)
         {
-            using(NetworkReaderPooled commandPayload = NetworkReaderPool.Get(commandMessage.payload))
+            switch (commandMessage.functionHash)
             {
-                session.Player.OnReceiveCommand(commandMessage.componentIndex, commandMessage.functionHash, commandPayload);
+                case NetworkMessages.CharacterClassManager.Commands.ConfirmDisconnect:
+                    session.Disconnect();
+                    break;
             }
         }
 
@@ -201,9 +206,9 @@ public class Listener : IDisposable
 
     static InterceptResult OnSSSClientResponse(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
     {
-        SSSClientResponse response = new SSSClientResponse(r);
+        //SSSClientResponse response = new SSSClientResponse(r);
 
-        session.Server?.OnSessionSSSReponse(session, response.Id);
+        //session.Server?.OnSessionSSSReponse(session, response.Id);
 
         return InterceptResult.Pass();
     }
@@ -221,9 +226,7 @@ public class Listener : IDisposable
 
         ushort _rotH, _rotV;
 
-        global::Misc.ByteToBools(code, out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
-
-        PlayerMovementState _state = (PlayerMovementState)global::Misc.BoolsToByte(b1, b2, b3, b4, b5);
+        code.ByteToBools(out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out _bitMouseLook, out _bitPosition, out _bitCustom);
 
         if (_bitPosition)
         {
@@ -340,7 +343,6 @@ public class Listener : IDisposable
         try
         {
             _manager.PollEvents();
-            _manager.ManualUpdate(PoolingDelayMs);
         }
         catch (Exception ex)
         {
@@ -419,8 +421,6 @@ public class Listener : IDisposable
 
         if (!PreAuth.TryRead(this, connectionIpAddress, request.Data, ref response, ref rejectForce, ref preAuth))
         {
-            SiteLinkLogger.Info(response);
-
             switch (response)
             {
                 case DisconnectType.InvalidClientType:
@@ -465,7 +465,7 @@ public class Listener : IDisposable
             case ClientType.Bridge:
                 BridgeConnection bridgeConnection = new BridgeConnection(this, request, preAuth);
 
-                NetPeer peer = bridgeConnection.AcceptRequest();
+                LiteNetPeer peer = bridgeConnection.AcceptRequest();
 
                 bridgeConnection.TargetServer = preAuth.TargetServer;
                 SiteLinkBridge.AttachServerPeer(preAuth.TargetServer, peer);
@@ -475,12 +475,6 @@ public class Listener : IDisposable
 
             case ClientType.GameClient:
 
-                ClientConnectingToListenerEvent ev = new ClientConnectingToListenerEvent(this, request, preAuth);
-                EventManager.Client.InvokeConnectingToListener(ev);
-
-                if (ev.IsCancelled)
-                    return;
-
                 if (RemoteConnection.ConnectionByUserId.ContainsKey(preAuth.UserId))
                 {
                     SiteLinkLogger.Info($"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");
@@ -488,6 +482,12 @@ public class Listener : IDisposable
                     request.RejectWithReason(RequestWriter, RejectionReason.Error);
                     return;
                 }
+
+                ClientConnectingToListenerEvent ev = new ClientConnectingToListenerEvent(this, request, preAuth);
+                EventManager.Client.InvokeConnectingToListener(ev);
+
+                if (ev.IsCancelled)
+                    return;
 
                 RemoteConnection connection = new RemoteConnection(this, request, preAuth);
 

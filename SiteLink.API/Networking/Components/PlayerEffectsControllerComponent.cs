@@ -8,7 +8,7 @@ public class PlayerEffectsControllerComponent : BehaviourComponent
     {
     }
 
-    public PlayerEffectsControllerComponent(NetworkObject networkObject) : this(networkObject, new SyncListObject<byte>(100))
+    public PlayerEffectsControllerComponent(NetworkObject networkObject) : this(networkObject, new[] { new SyncListObject<byte>(255)})
     {
         //
     }
@@ -23,5 +23,7 @@ public class PlayerEffectsControllerComponent : BehaviourComponent
         }
 
         writer.WriteULong(SyncVarDirtyBits);
+
     }
+
 }

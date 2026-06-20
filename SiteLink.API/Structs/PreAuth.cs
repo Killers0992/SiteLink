@@ -44,7 +44,7 @@ public struct PreAuth
         BackwardRevision = backwardRevision;
 
         UserId = userId;
-        
+
         Expiration = expiration;
 
         CentralFlags = centralFlags;
@@ -60,10 +60,10 @@ public struct PreAuth
     {
         NetDataWriter writer = new NetDataWriter();
 
-        writer.Put((byte) ClientType.GameClient);
-        writer.Put((byte) ClientVersion.Major);
-        writer.Put((byte) ClientVersion.Minor);
-        writer.Put((byte) ClientVersion.Build);
+        writer.Put((byte)ClientType.GameClient);
+        writer.Put((byte)ClientVersion.Major);
+        writer.Put((byte)ClientVersion.Minor);
+        writer.Put((byte)ClientVersion.Build);
         writer.Put(BackwardCompatibility);
 
         if (BackwardCompatibility)
@@ -240,7 +240,7 @@ public struct PreAuth
             return false;
         }
 
-        CentralAuthPreauthFlags centralFlags = (CentralAuthPreauthFlags) rawCentralFlags;
+        CentralAuthPreauthFlags centralFlags = (CentralAuthPreauthFlags)rawCentralFlags;
 
         if (!reader.TryGetString(out string region))
         {

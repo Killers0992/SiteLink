@@ -3,7 +3,7 @@
 public class SpawnTextCommand
 {
     [ConsoleCommand("spawntext")]
-    public static void OnSpawnTextCommand( string[] args)
+    public static void OnSpawnTextCommand(string[] args)
     {
         if (args.Length < 2)
         {

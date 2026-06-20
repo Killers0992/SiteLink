@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+	  <TargetFramework>net10.0</TargetFramework>
+	<ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+	
+    <ItemGroup>
+        <PackageReference Include="ICSharpCode.Decompiler" Version="10.0.0.8330" />
+    </ItemGroup>
+
+    <ItemGroup>
+	    <Reference Include="Mirror">
+		    <HintPath>$(SL_REFERENCES)\Mirror.dll</HintPath>
+	    </Reference>
+	    <Reference Include="Mono.CecilX">
+	      <HintPath>C:\Users\Kille\Downloads\Mono.CecilX.dll</HintPath>
+	    </Reference>
+	    <Reference Include="Mono.CecilX.Mdb">
+	      <HintPath>C:\Users\Kille\Downloads\Mono.CecilX.Mdb.dll</HintPath>
+	    </Reference>
+	    <Reference Include="Mono.CecilX.Pdb">
+	      <HintPath>C:\Users\Kille\Downloads\Mono.CecilX.Pdb.dll</HintPath>
+	    </Reference>
+	    <Reference Include="Mono.CecilX.Rocks">
+	      <HintPath>C:\Users\Kille\Downloads\Mono.CecilX.Rocks.dll</HintPath>
+	    </Reference>
+    </ItemGroup>
+
+</Project>

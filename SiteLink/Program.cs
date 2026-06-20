@@ -1,7 +1,6 @@
 ﻿using LiteNetLib;
 using Microsoft.Extensions.Logging;
 using SiteLink.API;
-using SiteLink.API.Commands;
 using SiteLink.Misc;
 using SiteLink.Services;
 
@@ -11,11 +10,9 @@ SiteLinkSettings.Load();
 
 ReadWriterInitializer.InitializeAll();
 
-NetDebug.Logger = new CustomNetLogger();
-
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
-builder.Logging.SetMinimumLevel(LogLevel.None);
+//builder.Logging.SetMinimumLevel(LogLevel.None);
 
 builder.Services.AddHostedService<LoggingService>();
 builder.Services.AddHostedService<ListenersService>();

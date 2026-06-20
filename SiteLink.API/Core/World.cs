@@ -1,8 +1,5 @@
 ﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
-using SiteLink.API.Networking.Common;
-using System.Threading;
-using System.Linq;
 
 namespace SiteLink.API.Core;
 
@@ -268,8 +265,6 @@ public class World : IDisposable
         {
             foreach (var obj in Objects)
             {
-                // Spawn objects for client.
-                SiteLinkLogger.Info($"Spawn {obj.Value.GetType().Name} for {session.UserId}");
                 obj.Value.SpawnWithPayload(session);
             }
         }

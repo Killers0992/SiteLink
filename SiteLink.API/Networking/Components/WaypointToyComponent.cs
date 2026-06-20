@@ -47,6 +47,7 @@ public class WaypointToyComponent : AdminToyBaseComponent
 
     public WaypointToyComponent(NetworkObject networkObject) : base(networkObject)
     {
+        // subscribe only once is done by root; here we only attach leaf hooks
     }
 
     protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
@@ -85,6 +86,8 @@ public class WaypointToyComponent : AdminToyBaseComponent
         base.OnSerialize(writer, initialState);
 
         if (initialState)
+        {
             writer.WriteByte(WaypointId);
+        }
     }
 }

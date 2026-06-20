@@ -1,7 +1,6 @@
 ﻿using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Networking.Connections;
-using SiteLink.API.Threading;
 
 namespace SiteLink.API.Networking
 {
@@ -64,7 +63,7 @@ namespace SiteLink.API.Networking
                         if (detachedAt.HasValue)
                         {
                             var offline = (now - detachedAt.Value).TotalSeconds;
-                            
+
                             SiteLinkLogger.Info($"Session re-established for user (f=yellow){userId}(f=white) (offline (f=green){offline:0.0}s(f=white)).", "Session");
                         }
                         else
@@ -99,7 +98,7 @@ namespace SiteLink.API.Networking
                 {
                     session.LastExpiryLogSecond = remainingSec;
 
-                   // if (!isPending)
+                    // if (!isPending)
                     //    SiteLinkLogger.Info($"Session for (f=yellow){userId}(f=white) expires in (f=green){remainingSec}s(f=white) (waiting for reconnect)...", "Session");
                 }
 
@@ -277,7 +276,7 @@ namespace SiteLink.API.Networking
 
             session.OnServerOffline += resp =>
             {
-                if (!resp.IsFinalResponse) 
+                if (!resp.IsFinalResponse)
                     return;
 
                 if (isPending)

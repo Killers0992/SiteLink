@@ -7,7 +7,7 @@ namespace SiteLink.API;
 
 public delegate void SiteLinkMessageHandler(
     NetPacketReader reader
-#if NET9_0
+#if NET10_0
     , Server server
 #endif
 );
@@ -24,7 +24,7 @@ public static class SiteLinkBridge
 
     private static readonly ConcurrentDictionary<ushort, List<SiteLinkMessageHandler>> _handlers = new();
 
-#if NET9_0
+#if NET10_0
 
     public delegate void BridgeConnectedHandler(Server server);
     public delegate void BridgeDisconnectedHandler(Server server, DisconnectInfo info);
@@ -32,7 +32,7 @@ public static class SiteLinkBridge
     private static readonly List<BridgeConnectedHandler> _connectedHandlers = new();
     private static readonly List<BridgeDisconnectedHandler> _disconnectedHandlers = new();
 
-    private static readonly ConcurrentDictionary<Server, NetPeer> _serverPeers = new();
+    private static readonly ConcurrentDictionary<Server, LiteNetPeer> _serverPeers = new();
 
 #else
 
@@ -57,7 +57,7 @@ public static class SiteLinkBridge
     public static bool IsConnected => _peer != null && _peer.ConnectionState == ConnectionState.Connected;
 #endif
 
-#if NET9_0
+#if NET10_0
     public static void RegisterConnectedHandler(BridgeConnectedHandler handler)
     {
         lock (_connectedHandlers) _connectedHandlers.Add(handler);
@@ -145,7 +145,7 @@ public static class SiteLinkBridge
             Dispatch(messageId, reader);
         };
 
-    _manager = new NetManager(_listener);
+        _manager = new NetManager(_listener);
         _manager.Start();
 
         if (GameCore.Console.Singleton.gameObject.GetComponent<BridgeRunner>() == null)
@@ -153,8 +153,8 @@ public static class SiteLinkBridge
     }
 #endif
 
-#if NET9_0
-    public static void AttachServerPeer(Server server, NetPeer peer)
+#if NET10_0
+    public static void AttachServerPeer(Server server, LiteNetPeer peer)
     {
         _serverPeers[server] = peer;
 
@@ -182,7 +182,7 @@ public static class SiteLinkBridge
         return removed;
     }
 
-    public static bool TryGetPeer(Server server, out NetPeer peer)
+    public static bool TryGetPeer(Server server, out LiteNetPeer peer)
         => _serverPeers.TryGetValue(server, out peer);
 #endif
 
@@ -226,7 +226,7 @@ public static class SiteLinkBridge
     }
 #endif
 
-#if NET9_0
+#if NET10_0
     public static bool SendTo(
         Server server,
         ushort messageId,
@@ -267,7 +267,7 @@ public static class SiteLinkBridge
     public static void Dispatch(
         ushort messageId,
         NetPacketReader reader
-#if NET9_0
+#if NET10_0
         , Server server
 #endif
     )
@@ -285,7 +285,7 @@ public static class SiteLinkBridge
             {
                 handler(
                     reader
-#if NET9_0
+#if NET10_0
                     , server
 #endif
                 );

@@ -6,6 +6,6 @@ public struct DelayConnectionResponse : IDisconnectResponse
 
     public DelayConnectionResponse(byte timeInSeconds)
     {
-        TimeInSeconds = timeInSeconds;   
+        TimeInSeconds = timeInSeconds;
     }
 }

@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     </PropertyGroup>
@@ -23,9 +23,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Reference Include="Assembly-CSharp">
-            <HintPath>$(SL_REFERENCES)\Assembly-CSharp.dll</HintPath>
-        </Reference>
         <Reference Include="BouncyCastle.Cryptography">
             <HintPath>$(SL_REFERENCES)\BouncyCastle.Cryptography.dll</HintPath>
         </Reference>

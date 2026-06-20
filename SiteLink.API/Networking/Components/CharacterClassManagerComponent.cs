@@ -50,18 +50,6 @@ public class CharacterClassManagerComponent : BehaviourComponent
         //
     }
 
-    public override bool OnReceiveCommand(ushort functionHash, NetworkReader reader)
-    {
-        switch(functionHash)
-        {
-            case NetworkMessages.CharacterClassManager.Commands.ConfirmDisconnect:
-                Object.Owner.Disconnect();
-                break;
-        }
-
-        return true;
-    }
-
     protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)
     {
         base.SerializeSyncVars(writer, forceAll);

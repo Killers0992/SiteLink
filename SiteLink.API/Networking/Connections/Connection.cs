@@ -9,7 +9,7 @@ public class Connection : IDisposable
     private readonly int _ownerThreadId;
 
     public ConnectionStats Stats { get; } = new ConnectionStats();
-    
+
     /// <summary>
     /// Gets the tag used for logging and identification.
     /// </summary>
@@ -46,7 +46,7 @@ public class Connection : IDisposable
     /// <summary>
     /// Gets the network peer associated with this connection instance.
     /// </summary>
-    public NetPeer Peer { get; private set; }
+    public LiteNetPeer Peer { get; private set; }
 
     /// <summary>
     /// Gets a value indicating whether the object has been disposed.
@@ -70,7 +70,7 @@ public class Connection : IDisposable
     /// <summary>
     /// Accepts the pending connection request.
     /// </summary>
-    public NetPeer AcceptRequest()
+    public LiteNetPeer AcceptRequest()
     {
         if (Request == null)
             return null;

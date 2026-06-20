@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
-using SiteLink.API.Commands;
-using SiteLink.API.Misc;
+﻿using SiteLink.API.Commands;
 using SiteLink.API.Metrics;
 using System.Diagnostics;
 

@@ -1,6 +1,4 @@
-﻿using SiteLink.API.Misc;
-
-namespace SiteLink.Services;
+﻿namespace SiteLink.Services;
 
 public class LoggingService : BackgroundService
 {
@@ -9,7 +7,7 @@ public class LoggingService : BackgroundService
         if (!Directory.Exists("Logs"))
             Directory.CreateDirectory("Logs");
 
-        File.AppendAllLines($"Logs/log_{SiteLinkLogger.SessionTime.ToString("dd_MM_yyyy_hh_mm_ss")}.txt", [message.ToString()] );
+        File.AppendAllLines($"Logs/log_{SiteLinkLogger.SessionTime.ToString("dd_MM_yyyy_hh_mm_ss")}.txt", [message.ToString()]);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

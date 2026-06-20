@@ -3,7 +3,7 @@ namespace SiteLink.API.Networking.Objects;
 
 //
 // Name: Tesla Gate Controller
-// NetworkID: 436
+// NetworkID: 434
 // AssetID: 180257209
 // SceneID: 3656837582856477417
 // Path: GameManager/Tesla Gate Controller
@@ -13,7 +13,7 @@ public class TeslaGateControllerObject : NetworkObject
     public const uint ObjectAssetId = 180257209;
     public const ulong ObjectSceneId = 3656837582856477417;
 
-    public override uint NetworkId { get; set; } = 436;
+    public override uint NetworkId { get; set; } = 434;
     public override uint AssetId { get; } = ObjectAssetId;
     public override ulong SceneId { get; } = ObjectSceneId;
     public TeslaGateControllerComponent TeslaGateController { get; }

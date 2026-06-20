@@ -1,6 +1,5 @@
 using Mirror;
 using System;
-using static ServerConfigSynchronizer;
 
 namespace SiteLink.API.Networking.Components;
 
@@ -73,6 +72,27 @@ public class ServerConfigSynchronizerComponent : BehaviourComponent
     public ServerConfigSynchronizerComponent(NetworkObject networkObject) : this(networkObject, new SyncListObject<sbyte>(), new SyncListObject<AmmoLimit>(), new SyncListObject<PredefinedBanTemplate>())
     {
         //
+    }
+
+    public struct PredefinedBanTemplate
+    {
+        // Token: 0x040002E7 RID: 743
+        public int Duration;
+
+        // Token: 0x040002E8 RID: 744
+        public string FormattedDuration;
+
+        // Token: 0x040002E9 RID: 745
+        public string Reason;
+    }
+
+    public struct AmmoLimit
+    {
+        // Token: 0x040002E5 RID: 741
+        public ItemType AmmoType;
+
+        // Token: 0x040002E6 RID: 742
+        public ushort Limit;
     }
 
     protected override void SerializeSyncVars(NetworkWriter writer, bool forceAll)

@@ -1,6 +1,4 @@
-﻿using static PlayerRoles.Spectating.SpectatableModuleBase;
-
-namespace SiteLink.API.Networking.Connections;
+﻿namespace SiteLink.API.Networking.Connections;
 
 public class RemoteConnection : Connection
 {

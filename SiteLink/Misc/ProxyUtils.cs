@@ -8,7 +8,7 @@ public static class ProxyUtils
     {
         Dictionary<ushort, Type> messages = new Dictionary<ushort, Type>();
 
-        Get(typeof(ServerConsole), ref messages);
+        //Get(typeof(ServerConsole), ref messages);
         Get(typeof(Mirror.Batcher), ref messages);
 
         return messages;

@@ -16,7 +16,7 @@ public class SiteLinkLogger
     public static void Info(object message, string tag = "SiteLink") => WriteLine($" (f=darkgray){TimeString}(f=white) [(f=cyan)INFO(f=white)] {(tag != null ? $"[(f=magenta){tag}(f=white)] " : string.Empty)}{message}");
     public static void Error(object message, string tag = "SiteLink") => WriteLine($" (f=darkgray){TimeString}(f=white) [(f=darkred)ERROR(f=white)] {(tag != null ? $"[(f=magenta){tag}(f=white)] " : string.Empty)}(f=red){message}");
     public static void Warn(object message, string tag = "SiteLink") => WriteLine($" (f=darkgray){TimeString}(f=white) [(f=darkyellow)WARN(f=white)] {(tag != null ? $"[(f=magenta){tag}(f=white)] " : string.Empty)}(f=yellow){message}");
-    
+
     public static void Debug(object message, string tag = "SiteLink")
     {
         if (!DebugMode)
