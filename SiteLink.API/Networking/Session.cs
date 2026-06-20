@@ -520,7 +520,7 @@ namespace SiteLink.API.Networking
 
                 // Happens during server shutdown.
                 case DisconnectReason.RemoteConnectionClose:
-                    Disconnect($"[SiteLink]\nServer {Server.Name} shutdown...");
+                    TryConnectToFallbackServersAfterShutdown();
                     return;
 
                 case DisconnectReason.Timeout:
@@ -587,6 +587,70 @@ namespace SiteLink.API.Networking
             }
 
             Disconnect();
+        }
+
+        private void TryConnectToFallbackServersAfterShutdown()
+        {
+            Server shutdownServer = Server;
+            string shutdownMessage = $"[SiteLink]\nServer {shutdownServer.Name} shutdown...";
+            RemoteConnection connection = Connection;
+
+            if (connection == null)
+                return;
+
+            Server[] fallbackServers = (shutdownServer.Settings?.FallbackServers ?? Array.Empty<string>())
+                .Select(name => SiteLink.API.Core.Server.Get<Server>(name: name))
+                .Where(server => server != null && server != shutdownServer)
+                .Distinct()
+                .ToArray();
+
+            if (fallbackServers.Length == 0)
+            {
+                Disconnect(shutdownMessage);
+                return;
+            }
+
+            Session fallbackSession = SessionManager.Singleton.CreateOrSwitchSession(
+                connection,
+                fallbackServers,
+                silent: true
+            );
+
+            if (fallbackSession == null)
+            {
+                Disconnect(shutdownMessage);
+                return;
+            }
+
+            bool failureHandled = false;
+
+            void DisconnectIfFallbackFailed()
+            {
+                if (failureHandled)
+                    return;
+
+                failureHandled = true;
+                Disconnect(shutdownMessage);
+            }
+
+            fallbackSession.OnServerOffline += response =>
+            {
+                if (response.IsFinalResponse)
+                    DisconnectIfFallbackFailed();
+            };
+
+            fallbackSession.OnServerFull += response =>
+            {
+                if (response.IsFinalResponse)
+                    DisconnectIfFallbackFailed();
+            };
+
+            fallbackSession.OnBanned += _ => DisconnectIfFallbackFailed();
+
+            SiteLinkLogger.Info(
+                $"{connection.Tag} Server (f=yellow){shutdownServer.Name}(f=white) shut down; trying fallback servers: " +
+                $"(f=yellow){string.Join("(f=white) -> (f=yellow)", fallbackServers.Select(server => server.Name))}(f=white)"
+            );
         }
 
         private void OnReceiveDataFromServer(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
