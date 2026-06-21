@@ -1,5 +1,3 @@
-using SiteLink.API.Packages;
-using SiteLink.API.Translations;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -8,6 +6,43 @@ return await PackageTool.RunAsync(args);
 
 internal static class PackageTool
 {
+    public sealed class PackageManifest
+    {
+        public string DisplayName { get; set; }
+        public string Description { get; set; }
+        public string Author { get; set; }
+        public string OwnerName { get; set; }
+        public string RepositoryName { get; set; }
+        public string PackageType { get; set; } = "plugin";
+        public string Version { get; set; }
+        public string ApiVersion { get; set; }
+        public string GameVersion { get; set; }
+        public Dictionary<string, PackageAsset> Platforms { get; set; } =
+            new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public sealed class PackageAsset
+    {
+        public string Platform { get; set; }
+        public string FileName { get; set; }
+        public string FileUrl { get; set; }
+        public string Sha256 { get; set; }
+        public long Size { get; set; }
+    }
+
+    public sealed class PackageReleaseIndex
+    {
+        public string DisplayName { get; set; }
+        public string Description { get; set; }
+        public string Author { get; set; }
+        public string OwnerName { get; set; }
+        public string RepositoryName { get; set; }
+        public string PackageType { get; set; }
+        public Dictionary<string, PackageManifest> Versions { get; set; } =
+            new(StringComparer.OrdinalIgnoreCase);
+    }
+
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = null,
@@ -28,7 +63,6 @@ internal static class PackageTool
             {
                 "manifest" => BuildManifest(args.Skip(1).ToArray()),
                 "index" => await BuildIndexAsync(args.Skip(1).ToArray()),
-                "translations" => BuildTranslations(args.Skip(1).ToArray()),
                 _ => throw new ArgumentException($"Unknown mode '{args[0]}'.")
             };
         }
@@ -161,19 +195,6 @@ internal static class PackageTool
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
         File.WriteAllText(outputPath, JsonSerializer.Serialize(index, JsonOptions));
-        Console.WriteLine($"Generated {outputPath}");
-        return 0;
-    }
-
-    private static int BuildTranslations(string[] args)
-    {
-        Dictionary<string, string> options = ParseOptions(args);
-        string outputPath = options.GetValueOrDefault("output") ??
-            "Translations/language_en.json";
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-        File.WriteAllText(
-            outputPath,
-            JsonSerializer.Serialize(new LanguageTranslations(), JsonOptions));
         Console.WriteLine($"Generated {outputPath}");
         return 0;
     }
