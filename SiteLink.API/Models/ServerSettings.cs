@@ -79,6 +79,39 @@ public class ServerSettings
         "[SiteLink]\nServer {server} is not reachable!";
 
     /// <summary>
+    /// Number of times SiteLink should try to reconnect after a full round restart.
+    /// </summary>
+    [Description("Number of reconnect attempts after a full server restart, before attempting fallback servers.")]
+    public int RestartRetryAttempts { get; set; } = 5;
+
+    /// <summary>
+    /// Delay between reconnect attempts after the restart countdown expires.
+    /// </summary>
+    [Description("Seconds between reconnect attempts after a full server restart.")]
+    public float RestartRetryInterval { get; set; } = 3f;
+
+    /// <summary>
+    /// Message shown while waiting for a restarting server.
+    /// </summary>
+    [Description("Hint shown while waiting for a restarting server. Supports {server}, {server_name}, {attempts}, {interval}, and {restart_delay}.")]
+    public string RestartWaitingMessage { get; set; } =
+        "[SiteLink]\nServer {server} is restarting, reconnecting in {restart_delay} seconds...";
+
+    /// <summary>
+    /// Message shown when restart reconnection attempts and fallback servers fail.
+    /// </summary>
+    [Description("Hint shown after restart reconnect attempts fail. Supports {server}, {server_name}, {attempts}, {interval}, and {restart_delay}.")]
+    public string RestartUnreachableMessage { get; set; } =
+        "[SiteLink]\nServer {server} did not come back online!";
+
+    /// <summary>
+    /// Message shown when a server delays a connection attempt.
+    /// </summary>
+    [Description("Hint shown when a server delays a connection. Supports {server}, {server_name}, and {delay}.")]
+    public string ConnectionDelayedMessage { get; set; } =
+        "[SiteLink]\nServer {server} delayed the connection by {delay} seconds...";
+
+    /// <summary>
     /// Gets or sets the configuration settings for the bridge.
     /// </summary>
     [Description("If server uses Bridge plugin then configure it below. ( this allows you to communicate between labapi plugins <-> sitelink plugins )")]

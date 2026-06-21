@@ -308,8 +308,14 @@ namespace SiteLink.API.Networking
 
             session.OnConnectionDelayed += delay =>
             {
-                if (isPending && connection.Request == null && !session.IsSilent)
-                    connection.AsServer.Hint($"Server <color=orange>{delay.Server.Name}</color> delayed connection, retrying...", 3f);
+                if (!isPending || connection.Request != null)
+                    return;
+
+                if (Slots.TryGetValue(connection.PreAuth.UserId, out SessionSlot currentSlot) &&
+                    currentSlot.Active != null)
+                {
+                    currentSlot.Active.ShowConnectionDelayedStatus(delay.Server, delay.Offset);
+                }
             };
         }
 

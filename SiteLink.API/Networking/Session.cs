@@ -5,6 +5,7 @@ using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
+using RoundRestarting;
 
 namespace SiteLink.API.Networking
 {
@@ -224,6 +225,7 @@ namespace SiteLink.API.Networking
         private string _shutdownWaitingMessage;
         private string _shutdownUnreachableMessage;
         private bool _shutdownRetryFinished;
+        private float _recoveryInitialDelay;
 
         public uint NetworkId { get; private set; }
         public string Nickname { get; set; }
@@ -294,9 +296,30 @@ namespace SiteLink.API.Networking
 
         private InterceptResult OnRestart(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
         {
-            session.Connection.IsSwitchingServers = true;
+            RoundRestartType type = (RoundRestartType)reader.ReadByte();
 
-            return InterceptResult.Drop();
+            switch (type)
+            {
+                case RoundRestartType.FastRestart:
+                    return InterceptResult.Pass();
+
+                case RoundRestartType.RedirectRestart:
+                    return InterceptResult.Pass();
+
+                case RoundRestartType.FullRestart:
+                    bool reconnect = reader.ReadBool();
+                    bool extendedReconnectionPeriod = reconnect && reader.ReadBool();
+                    float restartDelay = reader.ReadFloat();
+
+                    if (!reconnect)
+                        return InterceptResult.Pass();
+
+                    session.BeginRestartRecovery(restartDelay, extendedReconnectionPeriod);
+                    return InterceptResult.Drop();
+
+                default:
+                    return InterceptResult.Pass();
+            }
         }
 
         private InterceptResult OnReceiveSeed(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
@@ -573,6 +596,7 @@ namespace SiteLink.API.Networking
                                 break;
 
                             OnConnectionDelayed.Invoke(new ConnectionDelayedResponse(ConnectingToServer, offset));
+                            RetryConnect(TimeSpan.FromSeconds(Math.Max(1, (int)offset)));
                             return;
 
                         case RejectionReason.ServerFull:
@@ -611,6 +635,9 @@ namespace SiteLink.API.Networking
             if (shutdownServer == null || Connection == null)
                 return;
 
+            if (_shutdownRetryServer == shutdownServer && !_shutdownRetryFinished)
+                return;
+
             ConfigureShutdownRetry(shutdownServer);
             ShowShutdownRetryStatus();
 
@@ -624,6 +651,37 @@ namespace SiteLink.API.Networking
             {
                 _nextShutdownRetry = DateTime.UtcNow;
             }
+        }
+
+        private void BeginRestartRecovery(float restartDelay, bool extendedReconnectionPeriod)
+        {
+            Server restartingServer = Server;
+
+            if (restartingServer == null || Connection == null)
+                return;
+
+            ServerSettings settings = restartingServer.Settings;
+
+            _shutdownRetryServer = restartingServer;
+            _shutdownRetryAttempts = Math.Max(0, settings?.RestartRetryAttempts ?? 0);
+            _shutdownRetryAttemptsMade = 0;
+            _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.RestartRetryInterval ?? 3f));
+            _recoveryInitialDelay = Math.Max(
+                0.1f,
+                extendedReconnectionPeriod ? Math.Max(restartDelay, 10f) : restartDelay);
+            _nextShutdownRetry = DateTime.UtcNow.AddSeconds(_recoveryInitialDelay);
+            _shutdownWaitingMessage = settings?.RestartWaitingMessage;
+            _shutdownUnreachableMessage = settings?.RestartUnreachableMessage;
+            _shutdownRetryFinished = false;
+
+            ShowShutdownRetryStatus();
+
+            SiteLinkLogger.Info(
+                $"{Connection.Tag} Server (f=yellow){restartingServer.Name}(f=white) is restarting; " +
+                $"first reconnect in (f=yellow){_recoveryInitialDelay:0.##}(f=white) second(s), then " +
+                $"(f=yellow){_shutdownRetryAttempts}(f=white) attempt(s) every " +
+                $"(f=yellow){_shutdownRetryInterval.TotalSeconds:0.##}(f=white) second(s)."
+            );
         }
 
         private void TryFallbackServersAfterShutdown()
@@ -699,7 +757,8 @@ namespace SiteLink.API.Networking
             _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
             _shutdownWaitingMessage = settings?.ShutdownWaitingMessage;
             _shutdownUnreachableMessage = settings?.ShutdownUnreachableMessage;
-            _shutdownRetryFinished = _shutdownRetryAttempts == 0;
+            _shutdownRetryFinished = false;
+            _recoveryInitialDelay = (float)_shutdownRetryInterval.TotalSeconds;
         }
 
         private void ShowShutdownRetryStatus()
@@ -776,7 +835,23 @@ namespace SiteLink.API.Networking
                 .Replace("{server}", _shutdownRetryServer?.DisplayName ?? string.Empty)
                 .Replace("{server_name}", _shutdownRetryServer?.Name ?? string.Empty)
                 .Replace("{attempts}", _shutdownRetryAttempts.ToString())
-                .Replace("{interval}", _shutdownRetryInterval.TotalSeconds.ToString("0.##"));
+                .Replace("{interval}", _shutdownRetryInterval.TotalSeconds.ToString("0.##"))
+                .Replace("{restart_delay}", _recoveryInitialDelay.ToString("0.##"));
+        }
+
+        internal void ShowConnectionDelayedStatus(Server server, byte delay)
+        {
+            string message = server?.Settings?.ConnectionDelayedMessage;
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            Connection?.AsServer.Hint(
+                message
+                    .Replace("{server}", server.DisplayName)
+                    .Replace("{server_name}", server.Name)
+                    .Replace("{delay}", delay.ToString()),
+                Math.Max(3f, delay + 0.5f)
+            );
         }
 
         private void OnReceiveDataFromServer(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
