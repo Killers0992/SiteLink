@@ -1,4 +1,5 @@
 using SiteLink.API.Packages;
+using SiteLink.API.Translations;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -27,6 +28,7 @@ internal static class PackageTool
             {
                 "manifest" => BuildManifest(args.Skip(1).ToArray()),
                 "index" => await BuildIndexAsync(args.Skip(1).ToArray()),
+                "translations" => BuildTranslations(args.Skip(1).ToArray()),
                 _ => throw new ArgumentException($"Unknown mode '{args[0]}'.")
             };
         }
@@ -163,6 +165,19 @@ internal static class PackageTool
         return 0;
     }
 
+    private static int BuildTranslations(string[] args)
+    {
+        Dictionary<string, string> options = ParseOptions(args);
+        string outputPath = options.GetValueOrDefault("output") ??
+            "Translations/language_en.json";
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        File.WriteAllText(
+            outputPath,
+            JsonSerializer.Serialize(new LanguageTranslations(), JsonOptions));
+        Console.WriteLine($"Generated {outputPath}");
+        return 0;
+    }
+
     private static Dictionary<string, string> ParseOptions(IEnumerable<string> args) =>
         args.Where(arg => arg.StartsWith("--") && arg.Contains('='))
             .Select(arg => arg[2..].Split('=', 2))
@@ -184,5 +199,6 @@ internal static class PackageTool
     {
         Console.WriteLine("manifest --project=project.csproj --repository=owner/name --asset=windows=path [--asset=linux=path]");
         Console.WriteLine("index --repository=owner/name [--token=token] [--output=Website/releases.json]");
+        Console.WriteLine("translations [--output=Translations/language_en.json]");
     }
 }

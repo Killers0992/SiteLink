@@ -1,4 +1,5 @@
-﻿using SiteLink.Networking.Batchers;
+﻿using SiteLink.API.Networking.Connections;
+using SiteLink.Networking.Batchers;
 
 namespace SiteLink.API.Misc
 {
@@ -11,11 +12,15 @@ namespace SiteLink.API.Misc
         // Reuse one writer for fetching batches (same pattern you already use)
         private readonly NetworkWriter _batchWriter = new NetworkWriter();
 
+        public RemoteConnection Connection;
+
         public MirrorSender(
+            RemoteConnection connection,
             int thresholdBytes,
             Func<double> timeSeconds,
             Action<byte[], int, int, DeliveryMethod> sendRaw)
         {
+            Connection = connection;
             _batcher = new CustomBatcher(thresholdBytes);
             _timeSeconds = timeSeconds;
             _sendRaw = sendRaw;

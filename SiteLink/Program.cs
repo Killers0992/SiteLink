@@ -12,12 +12,13 @@ ReadWriterInitializer.InitializeAll();
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
-//builder.Logging.SetMinimumLevel(LogLevel.None);
+builder.Logging.SetMinimumLevel(LogLevel.None);
 
 builder.Services.AddHostedService<LoggingService>();
 builder.Services.AddHostedService<ListenersService>();
 builder.Services.AddHostedService<ListService>();
 builder.Services.AddHostedService<SessionService>();
+builder.Services.AddHostedService<SchedulerService>();
 
 SiteLinkAPI.Initialize(builder.Services);
 

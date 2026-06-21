@@ -11,6 +11,7 @@ public abstract class Plugin
 
     public string PluginDirectory { get; internal set; }
     public virtual ITranslationCatalog TranslationCatalog => null;
+    public PlayerDataStore Data => StorageManager.ForPlugin(this);
 
     public virtual void LoadConfig() { }
     public virtual void SaveConfig() { }

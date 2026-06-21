@@ -6,16 +6,6 @@ namespace SiteLink.API.Threading;
 internal class ScheduledTaskService
 {
     private readonly ConcurrentBag<ScheduledTask> _tasks = new();
-    private Task _task;
-
-    /// <summary>
-    /// Starts the scheduled task service.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    public void Start(CancellationToken cancellationToken = default)
-    {
-        _task = Task.Run(() => RunAsync(cancellationToken), cancellationToken);
-    }
 
     /// <summary>
     /// Schedules a repeating task.
@@ -39,7 +29,7 @@ internal class ScheduledTaskService
         _tasks.Add(new OneShotTask(action, when, targetThread));
     }
 
-    private async Task RunAsync(CancellationToken cancellationToken)
+    public async Task RunAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -64,7 +54,6 @@ internal class ScheduledTaskService
             // Clean up executed one-shot tasks
             if (tasksToProcess.OfType<OneShotTask>().Any(t => t.HasExecuted))
             {
-                // This is a simple approach - for production, consider a more efficient cleanup strategy
             }
 
             await Task.Delay(10, cancellationToken);

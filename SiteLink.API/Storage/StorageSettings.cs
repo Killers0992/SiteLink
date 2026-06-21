@@ -14,7 +14,7 @@ public sealed class StorageSettings
     public string SqlitePath { get; set; } = "Data/sitelink.db";
 
     [Description("MySQL connection string. Used when provider is mysql.")]
-    public string MySqlConnectionString { get; set; } =
+    public string MysqlConnectionString { get; set; } =
         "Server=127.0.0.1;Port=3306;Database=sitelink;User ID=sitelink;Password=change-me;";
 
     [Description("Table used by SQL providers.")]

@@ -13,6 +13,7 @@ public sealed class PlayerDataStore
     }
 
     public string Scope { get; }
+    public PlayerDataRecord Global => For("$global");
 
     public PlayerDataRecord For(string userId) => new(this, userId);
 

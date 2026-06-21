@@ -86,6 +86,12 @@ namespace SiteLink.API.Networking
         /// </summary>
         public string Language => TranslationManager.GetLanguage(this);
 
+        /// <summary>
+        /// Gets the proxy-owned persistent data record for this player.
+        /// Plugins should normally use Plugin.Data.For(UserId) for isolated storage.
+        /// </summary>
+        public PlayerDataRecord Data => StorageManager.Core.For(UserId);
+
         public SessionStats Stats { get; } = new SessionStats();
 
         /// <summary>
@@ -238,6 +244,7 @@ namespace SiteLink.API.Networking
 
         public int MapSeed { get; private set; } = -1;
 
+        public bool IsRestarting { get; private set; }
         public bool IsReady { get; internal set; }
         public bool IsConnectionConnected => Connection != null;
         public bool IsConnectedToSimulated { get; private set; }
@@ -285,6 +292,7 @@ namespace SiteLink.API.Networking
                     : $"{Connection.Tag} Connecting to server (f=yellow){servers[0].Name}(f=white)...");
 
             AsClient = new MirrorSender(
+                connection,
                 SiteLinkAPI.ThresholdBytes,
                 () => SessionTime.TotalSeconds,
                 (bytes, offset, length, method) =>
@@ -319,6 +327,9 @@ namespace SiteLink.API.Networking
                     if (!reconnect)
                         return InterceptResult.Pass();
 
+                    SiteLinkLogger.Info($"{Connection?.Tag} Server closed the connection, likely due to restart.");
+
+                    IsRestarting = true;
                     session.BeginRestartRecovery(restartDelay, extendedReconnectionPeriod);
                     return InterceptResult.Drop();
 
@@ -519,6 +530,7 @@ namespace SiteLink.API.Networking
             Status = SessionStatus.Connected;
             Server = server;
 
+            IsRestarting = false;
             IsConnectedToSimulated = isSimulated;
 
             SiteLinkLogger.Info(
@@ -562,7 +574,7 @@ namespace SiteLink.API.Networking
                     break;
 
                 // Happens during server shutdown.
-                case DisconnectReason.RemoteConnectionClose:
+                case DisconnectReason.RemoteConnectionClose when !IsRestarting:
                     BeginShutdownRecovery();
                     return;
 
@@ -673,9 +685,9 @@ namespace SiteLink.API.Networking
             _shutdownRetryAttempts = Math.Max(0, settings?.RestartRetryAttempts ?? 0);
             _shutdownRetryAttemptsMade = 0;
             _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.RestartRetryInterval ?? 3f));
-            _recoveryInitialDelay = Math.Max(
-                0.1f,
-                extendedReconnectionPeriod ? Math.Max(restartDelay, 10f) : restartDelay);
+
+            _recoveryInitialDelay = 10f;
+
             _nextShutdownRetry = DateTime.UtcNow.AddSeconds(_recoveryInitialDelay);
             _shutdownWaitingMessage = TranslationManager.For(this).Recovery.RestartWaiting;
             _shutdownUnreachableMessage = TranslationManager.For(this).Recovery.RestartUnreachable;
@@ -689,6 +701,8 @@ namespace SiteLink.API.Networking
                 $"(f=yellow){_shutdownRetryAttempts}(f=white) attempt(s) every " +
                 $"(f=yellow){_shutdownRetryInterval.TotalSeconds:0.##}(f=white) second(s)."
             );
+
+            DestroyNet();
         }
 
         private void TryFallbackServersAfterShutdown()
@@ -709,6 +723,11 @@ namespace SiteLink.API.Networking
                 Disconnect(unreachableMessage);
                 return;
             }
+
+            SiteLinkLogger.Info(
+                $"{Connection.Tag} Server (f=yellow){_shutdownRetryServer.Name}(f=white) did not recover; " +
+                $"no fallback servers configured."
+            );
 
             Session fallbackSession = SessionManager.Singleton.CreateOrSwitchSession(
                 Connection,

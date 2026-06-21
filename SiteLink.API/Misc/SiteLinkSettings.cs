@@ -39,6 +39,26 @@ public class SiteLinkSettings
             return;
         }
 
+        try
+        {
+            StorageManager.Initialize(Singleton.Storage);
+        }
+        catch (Exception ex)
+        {
+            SiteLinkLogger.Error($"Failed to initialize storage provider '{Singleton.Storage?.Provider}': {ex}", "Storage");
+            if (!string.Equals(Singleton.Storage?.Provider, "json", StringComparison.OrdinalIgnoreCase))
+            {
+                SiteLinkLogger.Warn("Falling back to JSON storage.", "Storage");
+                StorageManager.Initialize(new StorageSettings
+                {
+                    Provider = "json",
+                    JsonPath = Singleton.Storage?.JsonPath ?? "Data/player_data.json"
+                });
+            }
+            else
+                throw;
+        }
+
         TranslationManager.Load(Singleton.Lang);
         Save();
     }
@@ -63,8 +83,11 @@ public class SiteLinkSettings
     [Description("Maximum player limit across all servers. Use -1 for unlimited.")]
     public int PlayerLimit { get; set; } = -1;
 
-    [Description("Language code loaded from Translations/language_{lang}.yml.")]
+    [Description("Language code loaded from Translations/language_{lang}.json.")]
     public string Lang { get; set; } = "en";
+
+    [Description("Persistent player and plugin data storage configuration.")]
+    public StorageSettings Storage { get; set; } = new();
 
     [Description("GitHub repository used for SiteLink release checks, in owner/repository format.")]
     public string UpdateRepository { get; set; } = "Killers0992/SiteLink";

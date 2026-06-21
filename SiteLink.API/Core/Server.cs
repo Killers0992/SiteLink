@@ -157,7 +157,20 @@ public class Server
 
     internal void InternalSessionAddPlayer(Session session) => OnSessionAddPlayer(session);
 
-    internal void InternalSessionReady(Session session) => OnSessionReady(session);
+    internal void InternalSessionReady(Session session)
+    {
+        session.Connection.AsServer.Send(w =>
+        {
+            w.WriteUShort(NetworkMessages.ObjectSpawnStartedMessage);
+        });
+
+        OnSessionReady(session);
+
+        session.Connection.AsServer.Send(w =>
+        {
+            w.WriteUShort(NetworkMessages.ObjectSpawnFinishedMessage);
+        });
+    }
 
     public virtual void OnSessionSpawned(Session session) { }
 

@@ -72,6 +72,9 @@ namespace SiteLink.API.Misc
 
         public static void Hint(this MirrorSender sender, string message, float duration = 3)
         {
+            if (!sender.Connection.Session.IsSpawned)
+                return;
+
             sender.Send(w =>
             {
                 w.WriteUShort(NetworkMessageId<HintMessage>.Id);

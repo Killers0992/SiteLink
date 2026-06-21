@@ -31,8 +31,6 @@ public static class TranslationManager
                 catalog.Owner.Equals("SiteLink", StringComparison.OrdinalIgnoreCase));
             Catalogs.Add(_core);
         }
-
-        PlayerLanguageStore.Load();
     }
 
     public static LanguageTranslations For(Session session) =>

@@ -27,7 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="Translations\language_en.yml">
+        <None Update="Translations\language_en.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         </None>

@@ -23,7 +23,7 @@ public class RemoteConnection : Connection
 
     public RemoteConnection(Listener listener, ConnectionRequest request, PreAuth preAuth) : base(listener, request, preAuth)
     {
-        AsServer = new MirrorSender(
+        AsServer = new MirrorSender(this,
             SiteLinkAPI.ThresholdBytes,
             NowSeconds,
             (bytes, offset, length, method) =>

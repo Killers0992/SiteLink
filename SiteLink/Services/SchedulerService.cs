@@ -7,14 +7,8 @@ namespace SiteLink.Services;
 /// </summary>
 public class SchedulerService : BackgroundService
 {
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Initialize the scheduler
-        Scheduler.Initialize();
-
-        SiteLinkLogger.Info("Scheduler initialized", "Scheduler");
-
-        // The scheduler runs on its own task, so we just wait for cancellation
-        return Task.CompletedTask;
+        await Scheduler.Initialize(stoppingToken);
     }
 }

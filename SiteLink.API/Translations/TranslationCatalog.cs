@@ -1,4 +1,5 @@
-using System.Reflection;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
 
 namespace SiteLink.API.Translations;
@@ -50,7 +51,7 @@ public sealed class TranslationCatalog<TTranslation> : ITranslationCatalog
         EnsureDefaultFile();
         Reload();
 
-        _watcher = new FileSystemWatcher(DirectoryPath, "language_*.yml")
+        _watcher = new FileSystemWatcher(DirectoryPath, "language_*.json")
         {
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
             EnableRaisingEvents = true
@@ -81,13 +82,13 @@ public sealed class TranslationCatalog<TTranslation> : ITranslationCatalog
     {
         Dictionary<string, TTranslation> loaded = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (string file in Directory.GetFiles(DirectoryPath, "language_*.yml"))
+        foreach (string file in Directory.GetFiles(DirectoryPath, "language_*.json"))
         {
             string language = Path.GetFileNameWithoutExtension(file)["language_".Length..];
             try
             {
                 loaded[TranslationManager.NormalizeLanguage(language)] =
-                    YamlParser.Deserializer.Deserialize<TTranslation>(File.ReadAllText(file)) ?? new TTranslation();
+                    JsonConvert.DeserializeObject<TTranslation>(File.ReadAllText(file)) ?? new TTranslation();
             }
             catch (Exception ex)
             {
@@ -108,11 +109,11 @@ public sealed class TranslationCatalog<TTranslation> : ITranslationCatalog
     public IReadOnlyList<TranslationValidationResult> Validate()
     {
         TTranslation defaults = new();
-        Dictionary<string, string> defaultValues =
-            FlattenYaml(YamlParser.Serializer.Serialize(defaults));
+        Dictionary<string, string> defaultValues = FlattenJson(
+            JsonConvert.SerializeObject(defaults));
         List<TranslationValidationResult> results = new();
 
-        foreach (string file in Directory.GetFiles(DirectoryPath, "language_*.yml"))
+        foreach (string file in Directory.GetFiles(DirectoryPath, "language_*.json"))
         {
             string language = TranslationManager.NormalizeLanguage(
                 Path.GetFileNameWithoutExtension(file)["language_".Length..]);
@@ -125,9 +126,9 @@ public sealed class TranslationCatalog<TTranslation> : ITranslationCatalog
 
             try
             {
-                string yaml = File.ReadAllText(file);
-                YamlParser.Deserializer.Deserialize<TTranslation>(yaml);
-                Dictionary<string, string> values = FlattenYaml(yaml);
+                string json = File.ReadAllText(file);
+                JsonConvert.DeserializeObject<TTranslation>(json);
+                Dictionary<string, string> values = FlattenJson(json);
 
                 foreach (string key in defaultValues.Keys.Except(values.Keys, StringComparer.OrdinalIgnoreCase))
                     result.MissingKeys.Add(key);
@@ -171,9 +172,11 @@ public sealed class TranslationCatalog<TTranslation> : ITranslationCatalog
 
     private void EnsureDefaultFile()
     {
-        string path = Path.Combine(DirectoryPath, $"language_{DefaultLanguage}.yml");
+        string path = Path.Combine(DirectoryPath, $"language_{DefaultLanguage}.json");
         if (!File.Exists(path))
-            File.WriteAllText(path, YamlParser.Serializer.Serialize(new TTranslation()));
+            File.WriteAllText(
+                path,
+                JsonConvert.SerializeObject(new TTranslation(), Formatting.Indented));
     }
 
     private void OnTranslationFileChanged(object sender, FileSystemEventArgs args)
@@ -202,62 +205,30 @@ public sealed class TranslationCatalog<TTranslation> : ITranslationCatalog
         }
     }
 
-    private static Dictionary<string, string> Flatten(object value, string prefix = "")
+    private static Dictionary<string, string> FlattenJson(string json)
     {
         Dictionary<string, string> result = new(StringComparer.OrdinalIgnoreCase);
-        if (value == null)
-            return result;
-
-        if (value is IDictionary<string, string> dictionary)
-        {
-            foreach ((string key, string dictionaryValue) in dictionary)
-                result[string.IsNullOrEmpty(prefix) ? key : $"{prefix}.{key}"] = dictionaryValue;
-
-            return result;
-        }
-
-        foreach (PropertyInfo property in value.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
-        {
-            string key = string.IsNullOrEmpty(prefix) ? property.Name : $"{prefix}.{property.Name}";
-            object propertyValue = property.GetValue(value);
-
-            if (property.PropertyType == typeof(string))
-                result[key] = propertyValue as string;
-            else if (propertyValue != null && !property.PropertyType.IsPrimitive && !property.PropertyType.IsEnum)
-            {
-                foreach ((string childKey, string childValue) in Flatten(propertyValue, key))
-                    result[childKey] = childValue;
-            }
-        }
-
+        FlattenJsonNode(JToken.Parse(json), string.Empty, result);
         return result;
     }
 
-    private static Dictionary<string, string> FlattenYaml(string yaml)
-    {
-        object root = YamlParser.Deserializer.Deserialize<object>(yaml);
-        Dictionary<string, string> result = new(StringComparer.OrdinalIgnoreCase);
-        FlattenYamlNode(root, string.Empty, result);
-        return result;
-    }
-
-    private static void FlattenYamlNode(
-        object node,
+    private static void FlattenJsonNode(
+        JToken node,
         string prefix,
         Dictionary<string, string> output)
     {
-        if (node is IDictionary<object, object> mapping)
+        if (node is JObject obj)
         {
-            foreach ((object keyObject, object value) in mapping)
+            foreach (JProperty property in obj.Properties())
             {
-                string key = keyObject?.ToString() ?? string.Empty;
-                string path = string.IsNullOrEmpty(prefix) ? key : $"{prefix}.{key}";
-                FlattenYamlNode(value, path, output);
+                string path = string.IsNullOrEmpty(prefix)
+                    ? property.Name
+                    : $"{prefix}.{property.Name}";
+                FlattenJsonNode(property.Value, path, output);
             }
-
             return;
         }
 
-        output[prefix] = node?.ToString();
+        output[prefix] = node.Type == JTokenType.Null ? null : node.ToString();
     }
 }

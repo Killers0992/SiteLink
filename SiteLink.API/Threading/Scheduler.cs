@@ -12,10 +12,10 @@ public static class Scheduler
     /// <summary>
     /// Initializes the scheduler.
     /// </summary>
-    public static void Initialize()
+    public static async Task Initialize(CancellationToken token)
     {
         _taskService = new ScheduledTaskService();
-        _taskService.Start();
+        await _taskService.RunAsync(token);
     }
 
     /// <summary>

@@ -12,7 +12,7 @@ public static class StorageManager
             ["json"] = settings => new JsonStorageProvider(settings.JsonPath),
             ["sqlite"] = settings => new SqliteStorageProvider(settings.SqlitePath, settings.TableName),
             ["mysql"] = settings => new MySqlStorageProvider(
-                settings.MySqlConnectionString,
+                settings.MysqlConnectionString,
                 settings.TableName)
         };
 

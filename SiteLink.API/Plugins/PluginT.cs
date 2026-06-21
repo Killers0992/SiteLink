@@ -30,7 +30,7 @@ public abstract class Plugin<T> : Plugin where T : class, new()
 
 /// <summary>
 /// Plugin base with strongly typed configuration and per-language translations.
-/// Files are stored under Plugins/{plugin}/Translations/language_{code}.yml.
+/// Files are stored under Plugins/{plugin}/Translations/language_{code}.json.
 /// </summary>
 public abstract class Plugin<TConfig, TTranslation> : Plugin<TConfig>
     where TConfig : class, new()
