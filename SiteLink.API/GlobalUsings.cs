@@ -15,6 +15,7 @@ global using SiteLink.API.Networking.Components;
 global using SiteLink.API.Networking.Objects;
 global using SiteLink.API.Plugins;
 global using SiteLink.API.Structs;
+global using SiteLink.API.Translations;
 global using System.Collections.Concurrent;
 global using System.Net;
 global using System.Reflection;

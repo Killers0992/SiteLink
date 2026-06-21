@@ -23,6 +23,13 @@
     </ItemGroup>
 
     <ItemGroup>
+        <None Update="Translations\language_en.yml">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
         <Reference Include="BouncyCastle.Cryptography">
             <HintPath>$(SL_REFERENCES)\BouncyCastle.Cryptography.dll</HintPath>
         </Reference>

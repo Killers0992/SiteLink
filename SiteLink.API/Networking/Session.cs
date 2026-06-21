@@ -584,7 +584,7 @@ namespace SiteLink.API.Networking
                     switch (reason)
                     {
                         case RejectionReason.ExpiredAuth:
-                            Disconnect("Expired auth");
+                            Disconnect(TranslationManager.Current.Connection.ExpiredAuthentication);
                             break;
 
                         case RejectionReason.RateLimit:
@@ -670,8 +670,8 @@ namespace SiteLink.API.Networking
                 0.1f,
                 extendedReconnectionPeriod ? Math.Max(restartDelay, 10f) : restartDelay);
             _nextShutdownRetry = DateTime.UtcNow.AddSeconds(_recoveryInitialDelay);
-            _shutdownWaitingMessage = settings?.RestartWaitingMessage;
-            _shutdownUnreachableMessage = settings?.RestartUnreachableMessage;
+            _shutdownWaitingMessage = TranslationManager.Current.Recovery.RestartWaiting;
+            _shutdownUnreachableMessage = TranslationManager.Current.Recovery.RestartUnreachable;
             _shutdownRetryFinished = false;
 
             ShowShutdownRetryStatus();
@@ -755,8 +755,8 @@ namespace SiteLink.API.Networking
             _shutdownRetryAttemptsMade = 0;
             _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.ShutdownRetryInterval ?? 10f));
             _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
-            _shutdownWaitingMessage = settings?.ShutdownWaitingMessage;
-            _shutdownUnreachableMessage = settings?.ShutdownUnreachableMessage;
+            _shutdownWaitingMessage = TranslationManager.Current.Recovery.ShutdownWaiting;
+            _shutdownUnreachableMessage = TranslationManager.Current.Recovery.ShutdownUnreachable;
             _shutdownRetryFinished = false;
             _recoveryInitialDelay = (float)_shutdownRetryInterval.TotalSeconds;
         }
@@ -831,25 +831,27 @@ namespace SiteLink.API.Networking
         {
             message ??= string.Empty;
 
-            return message
-                .Replace("{server}", _shutdownRetryServer?.DisplayName ?? string.Empty)
-                .Replace("{server_name}", _shutdownRetryServer?.Name ?? string.Empty)
-                .Replace("{attempts}", _shutdownRetryAttempts.ToString())
-                .Replace("{interval}", _shutdownRetryInterval.TotalSeconds.ToString("0.##"))
-                .Replace("{restart_delay}", _recoveryInitialDelay.ToString("0.##"));
+            return TranslationManager.Format(message)
+                .Add("server", _shutdownRetryServer?.DisplayName)
+                .Add("server_name", _shutdownRetryServer?.Name)
+                .Add("attempts", _shutdownRetryAttempts)
+                .Add("interval", _shutdownRetryInterval.TotalSeconds, "0.##")
+                .Add("restart_delay", _recoveryInitialDelay, "0.##")
+                .Format();
         }
 
         internal void ShowConnectionDelayedStatus(Server server, byte delay)
         {
-            string message = server?.Settings?.ConnectionDelayedMessage;
+            string message = TranslationManager.Current.Connection.ConnectionDelayed;
             if (string.IsNullOrEmpty(message))
                 return;
 
             Connection?.AsServer.Hint(
-                message
-                    .Replace("{server}", server.DisplayName)
-                    .Replace("{server_name}", server.Name)
-                    .Replace("{delay}", delay.ToString()),
+                TranslationManager.Format(message)
+                    .Add("server", server?.DisplayName)
+                    .Add("server_name", server?.Name)
+                    .Add("delay", delay)
+                    .Format(),
                 Math.Max(3f, delay + 0.5f)
             );
         }

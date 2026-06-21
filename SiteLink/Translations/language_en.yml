@@ -1,0 +1,73 @@
+# Messages shown while connecting to backend servers.
+connection:
+  # Placeholders: {server}, {server_name}
+  server_not_found: |-
+    [SiteLink]
+    Server {server_name} was not found.
+
+  # Placeholders: {server}, {server_name}
+  server_removed: |-
+    [SiteLink]
+    Server {server} was removed from the configuration.
+
+  # No placeholders.
+  expired_authentication: |-
+    [SiteLink]
+    Your authentication token expired.
+
+  # Placeholders: {server}, {server_name}
+  server_full_hint: Server <color=orange>{server}</color> is full!
+
+  # Placeholders: {server}, {server_name}
+  server_full_disconnect: |-
+    [SiteLink]
+    Server {server} is full.
+
+  # Placeholders: {server}, {server_name}
+  server_offline_hint: Server <color=orange>{server}</color> is offline!
+
+  # Placeholders: {server}, {server_name}
+  server_offline_disconnect: |-
+    [SiteLink]
+    Server {server} is offline.
+
+  # Placeholders: {server}, {server_name}, {reason}, {expires}
+  banned_hint: 'Banned from <color=orange>{server}</color>: {reason}'
+
+  # Placeholders: {server}, {server_name}, {reason}, {expires}
+  banned_disconnect: |-
+    [SiteLink]
+    Banned from {server}: {reason}
+    Expires: {expires}
+
+  # Placeholders: {server}, {server_name}, {delay}
+  connection_delayed: |-
+    [SiteLink]
+    Server {server} delayed the connection by {delay} seconds...
+
+  # No placeholders. Internal transition reason; normally not shown.
+  session_replaced: |-
+    [SiteLink]
+    Your server session was replaced.
+
+# Messages shown when a backend server shuts down or restarts.
+recovery:
+  # Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}
+  shutdown_waiting: |-
+    [SiteLink]
+    Server {server} shut down, waiting for it to be online...
+
+  # Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}
+  shutdown_unreachable: |-
+    [SiteLink]
+    Server {server} is not reachable!
+
+  # Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}
+  restart_waiting: |-
+    [SiteLink]
+    Server {server} is restarting, reconnecting in {restart_delay} seconds...
+
+  # Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}
+  restart_unreachable: |-
+    [SiteLink]
+    Server {server} did not come back online!

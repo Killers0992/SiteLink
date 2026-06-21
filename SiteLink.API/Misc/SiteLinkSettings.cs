@@ -39,6 +39,7 @@ public class SiteLinkSettings
             return;
         }
 
+        TranslationManager.Load(Singleton.Lang);
         Save();
     }
 
@@ -61,6 +62,9 @@ public class SiteLinkSettings
     /// </summary>
     [Description("Maximum player limit across all servers. Use -1 for unlimited.")]
     public int PlayerLimit { get; set; } = -1;
+
+    [Description("Language code loaded from Translations/language_{lang}.yml.")]
+    public string Lang { get; set; } = "en";
 
     /// <summary>
     /// The list of listeners that define how SiteLink accepts player connections.

@@ -149,7 +149,7 @@ namespace SiteLink.API.Networking
                     return null;
 
                 // Dispose any old pending attempt
-                slot.Pending?.Disconnect("Replaced by newer pending session");
+                slot.Pending?.Disconnect(TranslationManager.Current.Connection.SessionReplaced);
                 slot.Pending?.Dispose();
 
                 slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
@@ -162,7 +162,7 @@ namespace SiteLink.API.Networking
             }
 
             // Otherwise create/replace active
-            slot.Active?.Disconnect("Active session replaced");
+            slot.Active?.Disconnect(TranslationManager.Current.Connection.SessionReplaced);
             slot.Active?.Dispose();
 
             slot.Active = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
@@ -194,7 +194,7 @@ namespace SiteLink.API.Networking
             slot.Active = pending;
             slot.Pending = null;
 
-            oldActive?.Disconnect("Replaced by new active session");
+            oldActive?.Disconnect(TranslationManager.Current.Connection.SessionReplaced);
             oldActive?.Dispose();
 
             //SiteLinkLogger.Info($"Promoted pending session to ACTIVE for user {userId}.");
@@ -263,7 +263,13 @@ namespace SiteLink.API.Networking
                     EventManager.Client.InvokeConnectionResponse(ev);
 
                     if (!ev.IsCancelled && !session.IsSilent)
-                        connection.AsServer.Hint($"Server <color=orange>{resp.Server.Name}</color> is full!", 3f);
+                    {
+                        connection.AsServer.Hint(
+                            FormatServerMessage(
+                                TranslationManager.Current.Connection.ServerFullHint,
+                                resp.Server),
+                            3f);
+                    }
 
                     // keep active, kill pending
                     FailPending(connection.PreAuth.UserId, session, $"full");
@@ -271,7 +277,11 @@ namespace SiteLink.API.Networking
                 }
 
                 // ACTIVE first join: reject if still pending, otherwise disconnect
-                RejectOrDisconnect(connection, $"Server {resp.Server.Name} is full");
+                RejectOrDisconnect(
+                    connection,
+                    FormatServerMessage(
+                        TranslationManager.Current.Connection.ServerFullDisconnect,
+                        resp.Server));
             };
 
             session.OnServerOffline += resp =>
@@ -285,25 +295,39 @@ namespace SiteLink.API.Networking
                     EventManager.Client.InvokeConnectionResponse(ev);
 
                     if (!ev.IsCancelled && !session.IsSilent)
-                        connection.AsServer.Hint($"Server <color=orange>{resp.Server.Name}</color> is offline!", 3f);
+                    {
+                        connection.AsServer.Hint(
+                            FormatServerMessage(
+                                TranslationManager.Current.Connection.ServerOfflineHint,
+                                resp.Server),
+                            3f);
+                    }
 
                     FailPending(connection.PreAuth.UserId, session, $"offline");
                     return;
                 }
 
-                RejectOrDisconnect(connection, $"Server {resp.Server.Name} is offline");
+                RejectOrDisconnect(
+                    connection,
+                    FormatServerMessage(
+                        TranslationManager.Current.Connection.ServerOfflineDisconnect,
+                        resp.Server));
             };
 
             session.OnBanned += ban =>
             {
                 if (isPending)
                 {
-                    connection.AsServer.Hint($"Banned from <color=orange>{ban.Server.Name}</color>: {ban.Reason}", 5f);
+                    connection.AsServer.Hint(
+                        FormatBanMessage(TranslationManager.Current.Connection.BannedHint, ban),
+                        5f);
                     FailPending(connection.PreAuth.UserId, session, $"Banned: {ban.Reason}");
                     return;
                 }
 
-                RejectOrDisconnect(connection, $"Banned from {ban.Server.Name}: {ban.Reason} (until {ban.Expires})");
+                RejectOrDisconnect(
+                    connection,
+                    FormatBanMessage(TranslationManager.Current.Connection.BannedDisconnect, ban));
             };
 
             session.OnConnectionDelayed += delay =>
@@ -323,6 +347,20 @@ namespace SiteLink.API.Networking
         {
             connection.Disconnect(reason);
         }
+
+        private static string FormatServerMessage(string template, Server server) =>
+            TranslationManager.Format(template)
+                .Add("server", server?.DisplayName)
+                .Add("server_name", server?.Name)
+                .Format();
+
+        private static string FormatBanMessage(string template, Session.BannedResponse ban) =>
+            TranslationManager.Format(template)
+                .Add("server", ban.Server?.DisplayName)
+                .Add("server_name", ban.Server?.Name)
+                .Add("reason", ban.Reason)
+                .Add("expires", ban.Expires, "g")
+                .Format();
 
         public void DestroyAllForUser(string userId, string reason)
         {

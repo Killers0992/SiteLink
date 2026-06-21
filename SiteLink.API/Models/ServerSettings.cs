@@ -65,20 +65,6 @@ public class ServerSettings
     public float ShutdownRetryInterval { get; set; } = 10f;
 
     /// <summary>
-    /// Message shown while the player remains connected to the proxy and waits for this server to return.
-    /// </summary>
-    [Description("Hint shown while waiting for a shut down server. Supports {server}, {server_name}, {attempts}, and {interval}.")]
-    public string ShutdownWaitingMessage { get; set; } =
-        "[SiteLink]\nServer {server} shutdown, waiting for server to be online...";
-
-    /// <summary>
-    /// Message shown when all reconnect attempts have failed.
-    /// </summary>
-    [Description("Hint shown after all shutdown reconnect attempts fail. Supports {server}, {server_name}, {attempts}, and {interval}.")]
-    public string ShutdownUnreachableMessage { get; set; } =
-        "[SiteLink]\nServer {server} is not reachable!";
-
-    /// <summary>
     /// Number of times SiteLink should try to reconnect after a full round restart.
     /// </summary>
     [Description("Number of reconnect attempts after a full server restart, before attempting fallback servers.")]
@@ -89,27 +75,6 @@ public class ServerSettings
     /// </summary>
     [Description("Seconds between reconnect attempts after a full server restart.")]
     public float RestartRetryInterval { get; set; } = 3f;
-
-    /// <summary>
-    /// Message shown while waiting for a restarting server.
-    /// </summary>
-    [Description("Hint shown while waiting for a restarting server. Supports {server}, {server_name}, {attempts}, {interval}, and {restart_delay}.")]
-    public string RestartWaitingMessage { get; set; } =
-        "[SiteLink]\nServer {server} is restarting, reconnecting in {restart_delay} seconds...";
-
-    /// <summary>
-    /// Message shown when restart reconnection attempts and fallback servers fail.
-    /// </summary>
-    [Description("Hint shown after restart reconnect attempts fail. Supports {server}, {server_name}, {attempts}, {interval}, and {restart_delay}.")]
-    public string RestartUnreachableMessage { get; set; } =
-        "[SiteLink]\nServer {server} did not come back online!";
-
-    /// <summary>
-    /// Message shown when a server delays a connection attempt.
-    /// </summary>
-    [Description("Hint shown when a server delays a connection. Supports {server}, {server_name}, and {delay}.")]
-    public string ConnectionDelayedMessage { get; set; } =
-        "[SiteLink]\nServer {server} delayed the connection by {delay} seconds...";
 
     /// <summary>
     /// Gets or sets the configuration settings for the bridge.

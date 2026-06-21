@@ -181,7 +181,15 @@ public class Server
 
         foreach (var s in sessions)
         {
-            try { s.Disconnect("Server removed from config."); } catch { }
+            try
+            {
+                s.Disconnect(
+                    TranslationManager.Format(TranslationManager.Current.Connection.ServerRemoved)
+                        .Add("server", DisplayName)
+                        .Add("server_name", Name)
+                        .Format());
+            }
+            catch { }
             try { s.Dispose(); } catch { }
         }
 

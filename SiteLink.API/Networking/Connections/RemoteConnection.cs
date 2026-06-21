@@ -50,7 +50,11 @@ public class RemoteConnection : Connection
 
         if (server == null)
         {
-            Disconnect($"Server {name} not found.");
+            Disconnect(
+                TranslationManager.Format(TranslationManager.Current.Connection.ServerNotFound)
+                    .Add("server", name)
+                    .Add("server_name", name)
+                    .Format());
             return false;
         }
 
