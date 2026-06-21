@@ -39,7 +39,7 @@ jobs:
         dotnet-version: 10.0.x
         
     - name: Run SiteLink Protocol Tool
-      run: dotnet run --project SiteLink.ProtocolTool.csproj
+      run: dotnet run --project SiteLink.PackageTool/SiteLink.PackageTool.csproj
         
     - name: Setup Pages
       uses: actions/configure-pages@f156874f8191504dae5b037505266ed5dda6c382
