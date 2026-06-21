@@ -117,7 +117,9 @@ public static class PluginsManager
     {
         string[] dependencies = Directory.GetFiles(DependenciesPath, "*.dll");
 
-        SiteLinkLogger.Info($"Loading (f=yellow){dependencies.Length}(f=white) dependencies...", "PluginsManager");
+        SiteLinkLogger.Info(TranslationManager.Log(
+            "plugins.loading_dependencies",
+            new TranslationContext().With("count", dependencies.Length)), "PluginsManager");
 
         int loaded = 0;
         for (int x = 0; x < dependencies.Length; x++)
@@ -126,12 +128,18 @@ public static class PluginsManager
             loaded++;
         }
 
-        SiteLinkLogger.Info($"Loaded (f=yellow){loaded}(f=white)/(f=yellow){dependencies.Length}(f=white) dependencies!", "PluginsManager");
+        SiteLinkLogger.Info(TranslationManager.Log(
+            "plugins.loaded_dependencies",
+            new TranslationContext()
+                .With("loaded", loaded)
+                .With("count", dependencies.Length)), "PluginsManager");
     }
 
     public static void LoadPlugins(List<Assembly> assemblies)
     {
-        SiteLinkLogger.Info($"Loading (f=yellow){assemblies.Count}(f=white) plugins...", "PluginsManager");
+        SiteLinkLogger.Info(TranslationManager.Log(
+            "plugins.loading",
+            new TranslationContext().With("count", assemblies.Count)), "PluginsManager");
 
         int loaded = 0;
         for (int x = 0; x < assemblies.Count; x++)
@@ -141,7 +149,12 @@ public static class PluginsManager
             Assembly assembly = assemblies[x];
             string name = assembly.GetName()?.Name ?? "unknown";
 
-            SiteLinkLogger.Info($"[(f=yellow){current}(f=white)/(f=yellow){assemblies.Count}(f=white)] Plugin '(f=yellow){name}(f=white)' is loading...", "PluginsManager");
+            SiteLinkLogger.Info(TranslationManager.Log(
+                "plugins.plugin_loading",
+                new TranslationContext()
+                    .With("current", current)
+                    .With("count", assemblies.Count)
+                    .With("plugin", name)), "PluginsManager");
 
             Dictionary<string, AssemblyName> loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName()).ToDictionary(x => x.Name, y => y);
             Dictionary<string, AssemblyName> pluginReferences = assembly.GetReferencedAssemblies().ToDictionary(x => x.Name, y => y);
@@ -188,15 +201,30 @@ public static class PluginsManager
 
             if (!Load(plugin, out Exception ex))
             {
-                SiteLinkLogger.Error($"[(f=yellow){current}(f=red)/(f=yellow){assemblies.Count}(f=red)] Plugin '(f=yellow){plugin.Name}(f=red)' failed to load!\n{ex}", "PluginsManager");
+                SiteLinkLogger.Error(TranslationManager.Log(
+                    "plugins.plugin_failed",
+                    new TranslationContext()
+                        .With("current", current)
+                        .With("count", assemblies.Count)
+                        .With("plugin", plugin.Name)
+                        .With("error", ex)), "PluginsManager");
                 continue;
             }
 
-            SiteLinkLogger.Info($"[(f=yellow){current}(f=white)/(f=yellow){assemblies.Count}(f=white)] Plugin '(f=yellow){name}(f=white)' loaded successfully!", "PluginsManager");
+            SiteLinkLogger.Info(TranslationManager.Log(
+                "plugins.plugin_loaded",
+                new TranslationContext()
+                    .With("current", current)
+                    .With("count", assemblies.Count)
+                    .With("plugin", name)), "PluginsManager");
             loaded++;
         }
 
-        SiteLinkLogger.Info($"Loaded (f=yellow){loaded}(f=white)/(f=yellow){assemblies.Count}(f=white) plugins!", "PluginsManager");
+        SiteLinkLogger.Info(TranslationManager.Log(
+            "plugins.loaded",
+            new TranslationContext()
+                .With("loaded", loaded)
+                .With("count", assemblies.Count)), "PluginsManager");
     }
 
     public static bool Load(Plugin plugin, out Exception ex)
@@ -206,6 +234,7 @@ public static class PluginsManager
         try
         {
             plugin.LoadConfig();
+            plugin.LoadTranslations();
             plugin.OnLoad(_serviceCollection);
 
             ex = null;

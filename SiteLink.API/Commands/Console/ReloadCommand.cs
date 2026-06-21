@@ -44,9 +44,11 @@ public class ReloadCommand
         foreach (Plugin plugin in PluginsManager.AssemblyToPlugin.Values)
         {
             plugin.LoadConfig();
+            plugin.ReloadTranslations();
         }
 
-        SiteLinkLogger.Info("Reloaded");
+        TranslationManager.ReloadAll();
+        SiteLinkLogger.Info(TranslationManager.Command("reload.complete"));
     }
 
     static string[] GetServers() =>

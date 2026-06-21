@@ -66,6 +66,15 @@ public class SiteLinkSettings
     [Description("Language code loaded from Translations/language_{lang}.yml.")]
     public string Lang { get; set; } = "en";
 
+    [Description("GitHub repository used for SiteLink release checks, in owner/repository format.")]
+    public string UpdateRepository { get; set; } = "Killers0992/SiteLink";
+
+    [Description("Checks SiteLink and installed plugins for updates during startup.")]
+    public bool CheckForUpdates { get; set; } = true;
+
+    [Description("Automatically installs available updates. Core updates restart the proxy.")]
+    public bool AutoUpdate { get; set; } = false;
+
     /// <summary>
     /// The list of listeners that define how SiteLink accepts player connections.
     /// Each listener can have its own port, game version, and server list configuration.

@@ -35,125 +35,139 @@ public class StatsCommand
                 ShowSessionsStats();
                 break;
             default:
-                SiteLinkLogger.Info("Unknown stats command. Usage: stats [system|services|listeners|connections|sessions]", "stats");
+                SiteLinkLogger.Info(TranslationManager.Command("stats.usage"), "stats");
                 break;
         }
     }
 
     private static void ShowSystemStats()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("System Statistics:");
-        sb.AppendLine($" - Uptime: (f=green){SystemStats.Singleton.Uptime.ToReadableString()}(f=white)");
-        sb.AppendLine($" - Memory: (f=cyan){SystemStats.Singleton.MemoryUsageMB}(f=white) MB");
-        sb.AppendLine($" - Total Transferred: (f=yellow){FormatBytes(SystemStats.Singleton.TotalBytesTransferred)}(f=white)");
-        sb.AppendLine($" - Active Connections: (f=green){RemoteConnection.ConnectionByUserId.Count}(f=white)");
-        sb.AppendLine($" - Active Listeners: (f=green){Listener.List.Count}(f=white)");
-
-        SiteLinkLogger.Info(sb.ToString(), "stats");
+        SiteLinkLogger.Info(TranslationManager.Command(
+            "stats.system",
+            new TranslationContext()
+                .With("uptime", SystemStats.Singleton.Uptime.ToReadableString())
+                .With("memory", SystemStats.Singleton.MemoryUsageMB)
+                .With("bytes", FormatBytes(SystemStats.Singleton.TotalBytesTransferred))
+                .With("connections", RemoteConnection.ConnectionByUserId.Count)
+                .With("listeners", Listener.List.Count)), "stats");
     }
 
     private static void ShowServicesStats()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Service Statistics:");
-
-
-        sb.AppendLine($" SessionService:");
+        List<string> rows = new();
         var sessionService = Services.SessionService.Instance;
         if (sessionService != null)
-        {
-            sb.AppendLine($"  - Iterations: (f=green){sessionService.Stats.IterationsCompleted}(f=white)");
-            sb.AppendLine($"  - Avg Time: (f=cyan){sessionService.Stats.AverageIterationTimeMs:F2}(f=white) ms");
-            sb.AppendLine($"  - CPU: (f=yellow){sessionService.Stats.CpuUsagePercentage:F1}(f=white)%");
-            sb.AppendLine($"  - Queue Depth: (f=green){sessionService.Stats.QueueDepth}(f=white)");
-            sb.AppendLine($"  - Items Processed: (f=green){sessionService.Stats.TotalProcessedItems}(f=white)");
-        }
+            rows.Add(FormatService("SessionService", sessionService.Stats));
 
-        sb.AppendLine($" ListenersService:");
         var listenersService = Services.ListenersService.Instance;
         if (listenersService != null)
-        {
-            sb.AppendLine($"  - Iterations: (f=green){listenersService.Stats.IterationsCompleted}(f=white)");
-            sb.AppendLine($"  - Avg Time: (f=cyan){listenersService.Stats.AverageIterationTimeMs:F2}(f=white) ms");
-            sb.AppendLine($"  - CPU: (f=yellow){listenersService.Stats.CpuUsagePercentage:F1}(f=white)%");
-            sb.AppendLine($"  - Items Processed: (f=green){listenersService.Stats.TotalProcessedItems}(f=white)");
-        }
+            rows.Add(FormatService("ListenersService", listenersService.Stats));
 
-        sb.AppendLine($" CommandsService:");
         var commandsService = Services.CommandsService.Instance;
         if (commandsService != null)
-        {
-            sb.AppendLine($"  - Iterations: (f=green){commandsService.Stats.IterationsCompleted}(f=white)");
-            sb.AppendLine($"  - Avg Time: (f=cyan){commandsService.Stats.AverageIterationTimeMs:F2}(f=white) ms");
-            sb.AppendLine($"  - CPU: (f=yellow){commandsService.Stats.CpuUsagePercentage:F1}(f=white)%");
-            sb.AppendLine($"  - Commands Executed: (f=green){commandsService.Stats.TotalProcessedItems}(f=white)");
-        }
+            rows.Add(FormatService("CommandsService", commandsService.Stats));
 
-        SiteLinkLogger.Info(sb.ToString(), "stats");
+        SiteLinkLogger.Info(TranslationManager.Command(
+            "stats.services",
+            new TranslationContext().With("services", string.Join("\n", rows))), "stats");
     }
 
     private static void ShowListenersStats()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Listener Statistics:");
+        List<string> rows = new();
 
         foreach (var listener in Listener.List)
         {
-            sb.AppendLine($" - (f=cyan){listener.Name}(f=white) [(f=green){listener.ListenAddress}:{listener.ListenPort}(f=white)]");
-            sb.AppendLine($"   Connections: (f=green){listener.Stats.TotalConnections}(f=white) | Errors: (f=red){listener.Stats.ConnectionErrors}(f=white)");
-            sb.AppendLine($"   Traffic Sent: (f=yellow){FormatBytes(listener.Stats.TotalBytesSent)}(f=white)");
-            sb.AppendLine($"   Traffic Received: (f=yellow){FormatBytes(listener.Stats.TotalBytesReceived)}(f=white)");
-            sb.AppendLine($"   Packets: (f=green){listener.Stats.TotalPacketsSent + listener.Stats.TotalPacketsReceived}(f=white) | Uptime: (f=darkcyan){listener.Stats.Uptime.ToReadableString()}(f=white)");
+            rows.Add(TranslationManager.Command(
+                "stats.listener",
+                new TranslationContext()
+                    .With("listener", listener.Name)
+                    .With("address", listener.ListenAddress)
+                    .With("port", listener.ListenPort)
+                    .With("connections", listener.Stats.TotalConnections)
+                    .With("errors", listener.Stats.ConnectionErrors)
+                    .With("sent", FormatBytes(listener.Stats.TotalBytesSent))
+                    .With("received", FormatBytes(listener.Stats.TotalBytesReceived))
+                    .With("packets", listener.Stats.TotalPacketsSent + listener.Stats.TotalPacketsReceived)
+                    .With("uptime", listener.Stats.Uptime.ToReadableString())));
         }
 
-        SiteLinkLogger.Info(sb.ToString(), "stats");
+        SiteLinkLogger.Info(TranslationManager.Command(
+            "stats.listeners",
+            new TranslationContext().With("listeners", string.Join("\n", rows))), "stats");
     }
 
     private static void ShowConnectionsStats()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Connection Statistics:");
-
         var connections = RemoteConnection.ConnectionByUserId.Values.ToList();
+        List<string> rows = new();
         if (connections.Count == 0)
-        {
-            sb.AppendLine(" No active connections.");
-        }
+            rows.Add(TranslationManager.Command("stats.no_connections"));
         else
         {
             foreach (var connection in connections)
             {
-                sb.AppendLine($" - (f=cyan){connection.PreAuth.UserId}(f=white) [(f=green){connection.Stats.ConnectionDuration.ToReadableString()}(f=white)]");
-                sb.AppendLine($"   Sent: (f=yellow){FormatBytes(connection.Stats.BytesSent)}(f=white) | Received: (f=yellow){FormatBytes(connection.Stats.BytesReceived)}(f=white)");
-                sb.AppendLine($"   Packets: (f=green){connection.Stats.TotalPackets}(f=white) | Session: {(connection.Session?.Server.Name ?? "None")}");
+                rows.Add(TranslationManager.Command(
+                    "stats.connection",
+                    TranslationContext.For(connection.Session)
+                        .With("user_id", connection.PreAuth.UserId)
+                        .With("duration", connection.Stats.ConnectionDuration.ToReadableString())
+                        .With("sent", FormatBytes(connection.Stats.BytesSent))
+                        .With("received", FormatBytes(connection.Stats.BytesReceived))
+                        .With("packets", connection.Stats.TotalPackets)
+                        .With("server_name", connection.Session?.Server?.Name ?? "None")));
             }
         }
 
-        SiteLinkLogger.Info(sb.ToString(), "stats");
+        SiteLinkLogger.Info(TranslationManager.Command(
+            "stats.connections",
+            new TranslationContext().With("connections", string.Join("\n", rows))), "stats");
     }
 
     private static void ShowSessionsStats()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Session Statistics:");
+        List<string> serverRows = new();
 
         foreach (var server in Server.List)
         {
             Session[] sessions = server.GetSessionsSnapshot();
 
-            sb.AppendLine($" - Server (f=cyan){server.Name}(f=white) [ (f=green){sessions.Length}(f=white) sessions ]");
+            List<string> players = new();
 
             foreach (Session session in sessions)
             {
-                sb.AppendLine($"   - {(session.Connection?.PreAuth.UserId ?? "Unknown")}");
-                sb.AppendLine($"     To Server: (f=yellow){FormatBytes(session.Stats.BytesToServer)}(f=white) | From Server: (f=yellow){FormatBytes(session.Stats.BytesFromServer)}(f=white)");
-                sb.AppendLine($"     Uptime: (f=darkcyan){session.Stats.Uptime.ToReadableString()}(f=white) | Reconnections: (f=green){session.Stats.ReconnectionCount}(f=white)");
+                players.Add(TranslationManager.Command(
+                    "stats.session",
+                    TranslationContext.For(session, server)
+                        .With("user_id", session.Connection?.PreAuth.UserId ?? "Unknown")
+                        .With("sent", FormatBytes(session.Stats.BytesToServer))
+                        .With("received", FormatBytes(session.Stats.BytesFromServer))
+                        .With("uptime", session.Stats.Uptime.ToReadableString())
+                        .With("reconnections", session.Stats.ReconnectionCount)));
             }
+
+            serverRows.Add(TranslationManager.Command(
+                "stats.server",
+                TranslationContext.For(server: server)
+                    .With("count", sessions.Length)
+                    .With("players", string.Join("\n", players))));
         }
 
-        SiteLinkLogger.Info(sb.ToString(), "stats");
+        SiteLinkLogger.Info(TranslationManager.Command(
+            "stats.sessions",
+            new TranslationContext().With("sessions", string.Join("\n", serverRows))), "stats");
     }
+
+    private static string FormatService(string name, ServiceStats stats) =>
+        TranslationManager.Command(
+            "stats.service",
+            new TranslationContext()
+                .With("service", name)
+                .With("iterations", stats.IterationsCompleted)
+                .With("average", stats.AverageIterationTimeMs.ToString("F2"))
+                .With("cpu", stats.CpuUsagePercentage.ToString("F1"))
+                .With("queue", stats.QueueDepth)
+                .With("processed", stats.TotalProcessedItems));
 
     private static string FormatBytes(long bytes)
     {

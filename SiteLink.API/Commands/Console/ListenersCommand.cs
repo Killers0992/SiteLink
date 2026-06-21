@@ -8,11 +8,17 @@ public class ListenersCommand
     public static void OnListenersCommand(string[] args)
     {
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Listeners:");
+        sb.AppendLine(TranslationManager.Command("listeners.header"));
 
         foreach (Listener listener in Listener.List)
         {
-            sb.AppendLine($" - (f=cyan){listener.ListenAddress}:{listener.ListenPort}(f=white) [ (f=green){listener.Connections.Count}(f=white) ] ((f=darkcyan){listener.Name}(f=white))");
+            sb.AppendLine(TranslationManager.Command(
+                "listeners.entry",
+                new TranslationContext()
+                    .With("address", listener.ListenAddress)
+                    .With("port", listener.ListenPort)
+                    .With("connections", listener.Connections.Count)
+                    .With("listener", listener.Name)));
         }
 
         SiteLinkLogger.Info(sb.ToString(), "listeners");

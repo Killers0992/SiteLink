@@ -9,7 +9,7 @@ public class SendCommand
     {
         if (args.Length < 2)
         {
-            SiteLinkLogger.Info("Syntax: send <all/player/server> <server>", "send");
+            SiteLinkLogger.Info(TranslationManager.Command("send.usage"), "send");
             return;
         }
 
@@ -17,7 +17,9 @@ public class SendCommand
 
         if (!Server.TryGetByName(serverName, out Server server))
         {
-            SiteLinkLogger.Info($"Server to send to with name {args[1]} does not exist!", "send");
+            SiteLinkLogger.Info(TranslationManager.Command(
+                "server.not_found",
+                new TranslationContext().With("server_name", args[1])), "send");
             return;
         }
 
@@ -34,14 +36,19 @@ public class SendCommand
                     {
                         client.Connect(server, true);
                     });
+                    sent++;
                 }
 
-                SiteLinkLogger.Info($"Sent (f=green){sent}(f=white) clients to server (f=green){server.Name}(f=white)", "send");
+                SiteLinkLogger.Info(TranslationManager.Command(
+                    "send.complete",
+                    TranslationContext.For(server: server).With("count", sent)), "send");
                 break;
             case true when args[0].ToLower().Contains('@'):
                 if (!RemoteConnection.TryGet(args[0], out RemoteConnection targetPlayer))
                 {
-                    SiteLinkLogger.Info($"Client with userid {args[0]} does not exist!", "send");
+                    SiteLinkLogger.Info(TranslationManager.Command(
+                        "player.not_found",
+                        new TranslationContext().With("user_id", args[0])), "send");
                     break;
                 }
 
@@ -53,7 +60,8 @@ public class SendCommand
             case true when Server.TryGetByName(args[0], out Server serverFrom) && server != null:
                 if (server == serverFrom)
                 {
-                    SiteLinkLogger.Info("You can't send the population of a server to the server they are already on!", "send");
+                    SiteLinkLogger.Info(TranslationManager.Command("send.same_server"), "send");
+                    break;
                 }
 
                 int sentPopulation = 0;
@@ -64,12 +72,17 @@ public class SendCommand
                     {
                         session?.Connection.Connect(server, true);
                     });
+                    sentPopulation++;
                 }
 
-                SiteLinkLogger.Info($"Sent (f=green){sentPopulation}(f=white) clients from {serverFrom.Name} to clients (f=green){server.Name}(f=white)", "send");
+                SiteLinkLogger.Info(TranslationManager.Command(
+                    "send.complete_from",
+                    TranslationContext.For(server: server)
+                        .With("source_server", serverFrom.Name)
+                        .With("count", sentPopulation)), "send");
                 break;
             default:
-                SiteLinkLogger.Info("You must use a player id in format of ID@Steam, ID@discord or ID@northwood or the name of a server to send from", "send");
+                SiteLinkLogger.Info(TranslationManager.Command("send.invalid_source"), "send");
                 break;
         }
     }

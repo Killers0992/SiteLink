@@ -6,7 +6,7 @@ public static class CommandsManager
 
     public static void RegisterConsoleCommandsInAssembly(Assembly assembly)
     {
-        SiteLinkLogger.Info("Register commands... ", "CommandsManager");
+        SiteLinkLogger.Info(TranslationManager.Log("commands.registering"), "CommandsManager");
 
         int loaded = 0;
         foreach (var type in assembly.GetTypes())
@@ -22,19 +22,25 @@ public static class CommandsManager
 
                 if (RegisteredCommands.ContainsKey(commandName))
                 {
-                    SiteLinkLogger.Info($"Command '(f=green){commandName}(f=white)' is already registered, skipping duplicate.", "CommandsManager");
+                    SiteLinkLogger.Info(TranslationManager.Log(
+                        "commands.duplicate",
+                        new TranslationContext().With("command", commandName)), "CommandsManager");
                     continue;
                 }
 
                 CommandDelegate del = (CommandDelegate)Delegate.CreateDelegate(typeof(CommandDelegate), method);
                 RegisteredCommands.Add(commandName, del);
 
-                SiteLinkLogger.Info($"Command '(f=green){commandName}(f=white)' registered!", "CommandsManager");
+                SiteLinkLogger.Info(TranslationManager.Log(
+                    "commands.registered_one",
+                    new TranslationContext().With("command", commandName)), "CommandsManager");
                 loaded++;
             }
         }
 
-        SiteLinkLogger.Info($"Registered (f=green){loaded}(f=white) commands!", "CommandsManager");
+        SiteLinkLogger.Info(TranslationManager.Log(
+            "commands.registered",
+            new TranslationContext().With("count", loaded)), "CommandsManager");
     }
 
     public static void Initialize()

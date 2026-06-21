@@ -27,3 +27,39 @@ public abstract class Plugin<T> : Plugin where T : class, new()
         File.WriteAllText(_configPath, YamlParser.Serializer.Serialize(Config));
     }
 }
+
+/// <summary>
+/// Plugin base with strongly typed configuration and per-language translations.
+/// Files are stored under Plugins/{plugin}/Translations/language_{code}.yml.
+/// </summary>
+public abstract class Plugin<TConfig, TTranslation> : Plugin<TConfig>
+    where TConfig : class, new()
+    where TTranslation : class, new()
+{
+    private TranslationCatalog<TTranslation> _translations;
+
+    public override ITranslationCatalog TranslationCatalog => _translations;
+
+    public TTranslation Translation =>
+        _translations?.Get(TranslationManager.CurrentLanguage) ?? new TTranslation();
+
+    public TTranslation GetTranslation(Session session) =>
+        _translations?.Get(TranslationManager.GetLanguage(session)) ?? Translation;
+
+    public override void LoadTranslations()
+    {
+        _translations?.Dispose();
+        _translations = TranslationManager.RegisterCatalog<TTranslation>(
+            Name,
+            Path.Combine(PluginDirectory, "Translations"));
+    }
+
+    public string Translate(
+        Session session,
+        Func<TTranslation, string> selector,
+        TranslationContext context = null)
+    {
+        context ??= TranslationContext.For(session, plugin: this);
+        return TranslationManager.Format(selector(GetTranslation(session)), context).Format();
+    }
+}

@@ -81,6 +81,11 @@ namespace SiteLink.API.Networking
 
         public PlayerObject Player { get; set; }
 
+        /// <summary>
+        /// Gets this player's selected language, falling back to settings.yml.
+        /// </summary>
+        public string Language => TranslationManager.GetLanguage(this);
+
         public SessionStats Stats { get; } = new SessionStats();
 
         /// <summary>
@@ -584,7 +589,9 @@ namespace SiteLink.API.Networking
                     switch (reason)
                     {
                         case RejectionReason.ExpiredAuth:
-                            Disconnect(TranslationManager.Current.Connection.ExpiredAuthentication);
+                            Disconnect(TranslationManager.Format(
+                                TranslationManager.For(this).Connection.ExpiredAuthentication,
+                                TranslationContext.For(this)).Format());
                             break;
 
                         case RejectionReason.RateLimit:
@@ -670,8 +677,8 @@ namespace SiteLink.API.Networking
                 0.1f,
                 extendedReconnectionPeriod ? Math.Max(restartDelay, 10f) : restartDelay);
             _nextShutdownRetry = DateTime.UtcNow.AddSeconds(_recoveryInitialDelay);
-            _shutdownWaitingMessage = TranslationManager.Current.Recovery.RestartWaiting;
-            _shutdownUnreachableMessage = TranslationManager.Current.Recovery.RestartUnreachable;
+            _shutdownWaitingMessage = TranslationManager.For(this).Recovery.RestartWaiting;
+            _shutdownUnreachableMessage = TranslationManager.For(this).Recovery.RestartUnreachable;
             _shutdownRetryFinished = false;
 
             ShowShutdownRetryStatus();
@@ -755,8 +762,8 @@ namespace SiteLink.API.Networking
             _shutdownRetryAttemptsMade = 0;
             _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.ShutdownRetryInterval ?? 10f));
             _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
-            _shutdownWaitingMessage = TranslationManager.Current.Recovery.ShutdownWaiting;
-            _shutdownUnreachableMessage = TranslationManager.Current.Recovery.ShutdownUnreachable;
+            _shutdownWaitingMessage = TranslationManager.For(this).Recovery.ShutdownWaiting;
+            _shutdownUnreachableMessage = TranslationManager.For(this).Recovery.ShutdownUnreachable;
             _shutdownRetryFinished = false;
             _recoveryInitialDelay = (float)_shutdownRetryInterval.TotalSeconds;
         }
@@ -831,7 +838,9 @@ namespace SiteLink.API.Networking
         {
             message ??= string.Empty;
 
-            return TranslationManager.Format(message)
+            return TranslationManager.Format(
+                    message,
+                    TranslationContext.For(this, _shutdownRetryServer))
                 .Add("server", _shutdownRetryServer?.DisplayName)
                 .Add("server_name", _shutdownRetryServer?.Name)
                 .Add("attempts", _shutdownRetryAttempts)
@@ -842,12 +851,12 @@ namespace SiteLink.API.Networking
 
         internal void ShowConnectionDelayedStatus(Server server, byte delay)
         {
-            string message = TranslationManager.Current.Connection.ConnectionDelayed;
+            string message = TranslationManager.For(this).Connection.ConnectionDelayed;
             if (string.IsNullOrEmpty(message))
                 return;
 
             Connection?.AsServer.Hint(
-                TranslationManager.Format(message)
+                TranslationManager.Format(message, TranslationContext.For(this, server))
                     .Add("server", server?.DisplayName)
                     .Add("server_name", server?.Name)
                     .Add("delay", delay)

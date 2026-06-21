@@ -9,7 +9,7 @@ public class KickCommand
     {
         if (args.Length < 1)
         {
-            SiteLinkLogger.Info("Syntax: kick <userid> <reason>", "kick");
+            SiteLinkLogger.Info(TranslationManager.Command("kick.usage"), "kick");
             return;
         }
 
@@ -29,13 +29,19 @@ public class KickCommand
 
                     kicked++;
                 }
-                SiteLinkLogger.Info($"Kicked (f=green){kicked}(f=white) clients with reason (f=yellow){string.Join(" ", text)}(f=white)", "kick");
+                SiteLinkLogger.Info(TranslationManager.Command(
+                    "kick.complete",
+                    new TranslationContext()
+                        .With("count", kicked)
+                        .With("reason", string.Join(" ", text))), "kick");
                 return;
 
             default:
                 if (!RemoteConnection.TryGet(userId, out RemoteConnection client))
                 {
-                    SiteLinkLogger.Info($"Not found player with userid (f=green){userId}(f=white)", "kick");
+                    SiteLinkLogger.Info(TranslationManager.Command(
+                        "player.not_found",
+                        new TranslationContext().With("user_id", userId)), "kick");
                     return;
                 }
 
@@ -44,7 +50,11 @@ public class KickCommand
                     client.Disconnect(string.Join(" ", text));
                 });
 
-                SiteLinkLogger.Info($"Kicked (f=green){userId}(f=white) with reason (f=yellow){string.Join(" ", text)}(f=white)", "kick");
+                SiteLinkLogger.Info(TranslationManager.Command(
+                    "kick.complete",
+                    new TranslationContext()
+                        .With("count", 1)
+                        .With("reason", string.Join(" ", text))), "kick");
                 break;
         }
     }

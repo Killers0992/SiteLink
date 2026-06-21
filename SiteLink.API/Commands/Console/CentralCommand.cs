@@ -9,13 +9,15 @@ public class CentralCommand
     {
         if (args.Length < 2)
         {
-            SiteLinkLogger.Info("Syntax: central <listenerName> <cmd>", "send");
+            SiteLinkLogger.Info(TranslationManager.Command("central.usage"), "central");
             return;
         }
 
         if (!Listener.TryGet(args[0].ToLower(), out Listener listener))
         {
-            SiteLinkLogger.Info($"Listener with name {args[0]} not exists! check \"listeners\" command", "central");
+            SiteLinkLogger.Info(TranslationManager.Command(
+                "listener.not_found",
+                new TranslationContext().With("listener", args[0])), "central");
             return;
         }
 

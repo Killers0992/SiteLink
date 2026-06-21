@@ -9,7 +9,7 @@ namespace SiteLink.API.Commands.Console
         {
             if (args.Length < 1)
             {
-                SiteLinkLogger.Info("Syntax: effect <userid>", "effect");
+                SiteLinkLogger.Info(TranslationManager.Command("effect.usage"), "effect");
                 return;
             }
 
@@ -17,7 +17,9 @@ namespace SiteLink.API.Commands.Console
 
             if (!RemoteConnection.TryGet(userId, out RemoteConnection client))
             {
-                SiteLinkLogger.Info($"Not found player with userid (f=green){userId}(f=white)", "effect");
+                SiteLinkLogger.Info(TranslationManager.Command(
+                    "player.not_found",
+                    new TranslationContext().With("user_id", userId)), "effect");
                 return;
             }
 
@@ -40,7 +42,7 @@ namespace SiteLink.API.Commands.Console
                 client.Session.Player.SendUpdate(client.Session);
             }
 
-            SiteLinkLogger.Info($"Effect set", "effect");
+            SiteLinkLogger.Info(TranslationManager.Command("effect.complete"), "effect");
         }
     }
 }

@@ -23,4 +23,30 @@ public class TextToyObject : NetworkObject
         TextToy = new TextToyComponent(this);
         Behaviours[0] = TextToy;
     }
+
+    /// <summary>
+    /// Sends a text value rendered specifically for one observer.
+    /// The shared text value is restored immediately afterwards.
+    /// </summary>
+    public void SendText(
+        Session observer,
+        string template,
+        TranslationContext context = null)
+    {
+        if (observer?.Connection == null)
+            return;
+
+        context ??= TranslationContext.For(observer);
+        string previous = TextToy.TextFormat;
+        TextToy.TextFormat = TranslationManager.Format(template, context).Format();
+        SendUpdate(observer);
+        TextToy.TextFormat = previous;
+        TextToy.ClearAllDirtyBits();
+    }
+
+    public void SendLocalizedText(
+        Session observer,
+        Func<LanguageTranslations, string> selector,
+        TranslationContext context = null) =>
+        SendText(observer, selector(TranslationManager.For(observer)), context);
 }

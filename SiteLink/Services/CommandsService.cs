@@ -44,12 +44,14 @@ public class CommandsService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    SiteLinkLogger.Error($"Failed executing command {ex}", commandName);
+                    SiteLinkLogger.Error(TranslationManager.Command(
+                        "failed",
+                        new TranslationContext().With("error", ex)), commandName);
                 }
             }
             else
             {
-                SiteLinkLogger.Info("Unknown command. Type 'help' to see a list of available commands.", commandName);
+                SiteLinkLogger.Info(TranslationManager.Command("unknown"), commandName);
             }
 
             stopwatch.Stop();

@@ -13,6 +13,7 @@ global using SiteLink.API.Networking;
 global using SiteLink.API.Networking.Common;
 global using SiteLink.API.Networking.Components;
 global using SiteLink.API.Networking.Objects;
+global using SiteLink.API.Packages;
 global using SiteLink.API.Plugins;
 global using SiteLink.API.Structs;
 global using SiteLink.API.Translations;

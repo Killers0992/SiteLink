@@ -184,7 +184,9 @@ public class Server
             try
             {
                 s.Disconnect(
-                    TranslationManager.Format(TranslationManager.Current.Connection.ServerRemoved)
+                    TranslationManager.Format(
+                            TranslationManager.For(s).Connection.ServerRemoved,
+                            TranslationContext.For(s, this))
                         .Add("server", DisplayName)
                         .Add("server_name", Name)
                         .Format());

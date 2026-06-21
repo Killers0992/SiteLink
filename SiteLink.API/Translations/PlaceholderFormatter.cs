@@ -9,11 +9,13 @@ namespace SiteLink.API.Translations;
 public sealed class PlaceholderFormatter
 {
     private readonly string _template;
+    private readonly TranslationContext _context;
     private readonly Dictionary<string, string> _values = new(StringComparer.OrdinalIgnoreCase);
 
-    public PlaceholderFormatter(string template)
+    public PlaceholderFormatter(string template, TranslationContext context = null)
     {
         _template = template ?? string.Empty;
+        _context = context ?? new TranslationContext();
     }
 
     public PlaceholderFormatter Add(string name, object value, string format = null)
@@ -35,7 +37,21 @@ public sealed class PlaceholderFormatter
 
     public string Format()
     {
-        string result = _template;
+        string result = Regex.Replace(
+            _template,
+            @"\{([a-zA-Z0-9_.-]+)\}",
+            match =>
+            {
+                string key = match.Groups[1].Value;
+                if (_values.TryGetValue(key, out string explicitValue))
+                    return explicitValue;
+
+                if (!PlaceholderRegistry.TryResolve(key, _context, out object value))
+                    return match.Value;
+
+                return ConvertValue(value, null);
+            },
+            RegexOptions.CultureInvariant);
 
         foreach ((string key, string value) in _values)
         {
@@ -51,4 +67,12 @@ public sealed class PlaceholderFormatter
     }
 
     public override string ToString() => Format();
+
+    private static string ConvertValue(object value, string format) =>
+        value switch
+        {
+            null => string.Empty,
+            IFormattable formattable => formattable.ToString(format, CultureInfo.InvariantCulture),
+            _ => value.ToString()
+        };
 }

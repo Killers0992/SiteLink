@@ -22,6 +22,7 @@ builder.Services.AddHostedService<SessionService>();
 SiteLinkAPI.Initialize(builder.Services);
 
 builder.Services.AddHostedService<CommandsService>();
+builder.Services.AddHostedService<UpdateService>();
 
 IHost host = builder.Build();
 

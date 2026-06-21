@@ -8,11 +8,14 @@ public class ServersCommand
     public static void OnServerCommand(string[] args)
     {
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Servers:");
+        sb.AppendLine(TranslationManager.Command("servers.header"));
 
         foreach (var server in Server.List)
         {
-            sb.AppendLine($" - (f=cyan){server.Name}(f=white) [ (f=green){server.SessionsCount}(f=white) ] ((f=darkcyan){server}(f=white))");
+            sb.AppendLine(TranslationManager.Command(
+                "servers.entry",
+                TranslationContext.For(server: server)
+                    .With("endpoint", server)));
         }
 
         SiteLinkLogger.Info(sb.ToString(), "servers");

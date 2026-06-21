@@ -51,7 +51,9 @@ public class RemoteConnection : Connection
         if (server == null)
         {
             Disconnect(
-                TranslationManager.Format(TranslationManager.Current.Connection.ServerNotFound)
+                TranslationManager.Format(
+                        TranslationManager.Current.Connection.ServerNotFound,
+                        TranslationContext.For(Session))
                     .Add("server", name)
                     .Add("server_name", name)
                     .Format());

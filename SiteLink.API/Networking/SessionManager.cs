@@ -149,7 +149,8 @@ namespace SiteLink.API.Networking
                     return null;
 
                 // Dispose any old pending attempt
-                slot.Pending?.Disconnect(TranslationManager.Current.Connection.SessionReplaced);
+                if (slot.Pending != null)
+                    slot.Pending.Disconnect(FormatSessionReplaced(slot.Pending));
                 slot.Pending?.Dispose();
 
                 slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
@@ -162,7 +163,8 @@ namespace SiteLink.API.Networking
             }
 
             // Otherwise create/replace active
-            slot.Active?.Disconnect(TranslationManager.Current.Connection.SessionReplaced);
+            if (slot.Active != null)
+                slot.Active.Disconnect(FormatSessionReplaced(slot.Active));
             slot.Active?.Dispose();
 
             slot.Active = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
@@ -194,7 +196,8 @@ namespace SiteLink.API.Networking
             slot.Active = pending;
             slot.Pending = null;
 
-            oldActive?.Disconnect(TranslationManager.Current.Connection.SessionReplaced);
+            if (oldActive != null)
+                oldActive.Disconnect(FormatSessionReplaced(oldActive));
             oldActive?.Dispose();
 
             //SiteLinkLogger.Info($"Promoted pending session to ACTIVE for user {userId}.");
@@ -266,8 +269,9 @@ namespace SiteLink.API.Networking
                     {
                         connection.AsServer.Hint(
                             FormatServerMessage(
-                                TranslationManager.Current.Connection.ServerFullHint,
-                                resp.Server),
+                                TranslationManager.For(session).Connection.ServerFullHint,
+                                resp.Server,
+                                session),
                             3f);
                     }
 
@@ -280,8 +284,9 @@ namespace SiteLink.API.Networking
                 RejectOrDisconnect(
                     connection,
                     FormatServerMessage(
-                        TranslationManager.Current.Connection.ServerFullDisconnect,
-                        resp.Server));
+                        TranslationManager.For(session).Connection.ServerFullDisconnect,
+                        resp.Server,
+                        session));
             };
 
             session.OnServerOffline += resp =>
@@ -298,8 +303,9 @@ namespace SiteLink.API.Networking
                     {
                         connection.AsServer.Hint(
                             FormatServerMessage(
-                                TranslationManager.Current.Connection.ServerOfflineHint,
-                                resp.Server),
+                                TranslationManager.For(session).Connection.ServerOfflineHint,
+                                resp.Server,
+                                session),
                             3f);
                     }
 
@@ -310,8 +316,9 @@ namespace SiteLink.API.Networking
                 RejectOrDisconnect(
                     connection,
                     FormatServerMessage(
-                        TranslationManager.Current.Connection.ServerOfflineDisconnect,
-                        resp.Server));
+                        TranslationManager.For(session).Connection.ServerOfflineDisconnect,
+                        resp.Server,
+                        session));
             };
 
             session.OnBanned += ban =>
@@ -319,7 +326,7 @@ namespace SiteLink.API.Networking
                 if (isPending)
                 {
                     connection.AsServer.Hint(
-                        FormatBanMessage(TranslationManager.Current.Connection.BannedHint, ban),
+                        FormatBanMessage(TranslationManager.For(session).Connection.BannedHint, ban, session),
                         5f);
                     FailPending(connection.PreAuth.UserId, session, $"Banned: {ban.Reason}");
                     return;
@@ -327,7 +334,7 @@ namespace SiteLink.API.Networking
 
                 RejectOrDisconnect(
                     connection,
-                    FormatBanMessage(TranslationManager.Current.Connection.BannedDisconnect, ban));
+                    FormatBanMessage(TranslationManager.For(session).Connection.BannedDisconnect, ban, session));
             };
 
             session.OnConnectionDelayed += delay =>
@@ -348,19 +355,24 @@ namespace SiteLink.API.Networking
             connection.Disconnect(reason);
         }
 
-        private static string FormatServerMessage(string template, Server server) =>
-            TranslationManager.Format(template)
+        private static string FormatServerMessage(string template, Server server, Session session) =>
+            TranslationManager.Format(template, TranslationContext.For(session, server))
                 .Add("server", server?.DisplayName)
                 .Add("server_name", server?.Name)
                 .Format();
 
-        private static string FormatBanMessage(string template, Session.BannedResponse ban) =>
-            TranslationManager.Format(template)
+        private static string FormatBanMessage(string template, Session.BannedResponse ban, Session session) =>
+            TranslationManager.Format(template, TranslationContext.For(session, ban.Server))
                 .Add("server", ban.Server?.DisplayName)
                 .Add("server_name", ban.Server?.Name)
                 .Add("reason", ban.Reason)
                 .Add("expires", ban.Expires, "g")
                 .Format();
+
+        private static string FormatSessionReplaced(Session session) =>
+            TranslationManager.Format(
+                TranslationManager.For(session).Connection.SessionReplaced,
+                TranslationContext.For(session)).Format();
 
         public void DestroyAllForUser(string userId, string reason)
         {
