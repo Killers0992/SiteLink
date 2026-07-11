@@ -1,0 +1,32 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-07-11T00:00:00+00:00",
+    "name": "SiteLink",
+    "author": "Killers0992@gmail.com",
+    "uuid": "3af83730-3f3c-47cd-9610-8cad18867f48",
+    "description": "High-performance multi-server proxy for SCP: Secret Laboratory, inspired by BungeeCord.",
+    "features": [],
+    "docker_images": {
+        "Dotnet 10": "ghcr.io\/parkervcp\/yolks:dotnet_10"
+    },
+    "file_denylist": [],
+    "startup": ".\/SiteLink",
+    "config": {
+        "files": "{}",
+        "startup": "{\n    \"done\": \"Listening for clients on\"\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!\/bin\/ash\n\ncd \/mnt\/server\n\ncurl -sSL \"https:\/\/github.com\/Killers0992\/SiteLink\/releases\/latest\/download\/SiteLink\" -o SiteLink\nchmod -R 777 .\/SiteLink",
+            "container": "ghcr.io\/parkervcp\/installers:alpine",
+            "entrypoint": "ash"
+        }
+    },
+    "variables": []
+}

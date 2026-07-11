@@ -49,6 +49,16 @@ You can host SiteLink on:
 ### **4. Edit `settings.yml`**
 Configure your network, servers, listeners, and server-list options.
 
+---
+
+## 🥚 Pterodactyl Egg
+
+Hosting SiteLink on a [Pterodactyl](https://pterodactyl.io/) panel? Import the ready-to-use egg:
+
+- [egg-site-link.json](https://github.com/Killers0992/SiteLink/blob/main/egg-site-link.json)
+
+The egg automatically downloads the latest Linux build from releases and runs it on the `Dotnet 10` container image. After the first start, edit the generated `settings.yml` (set `listen_port` to match your allocation) and restart the server.
+
 ## Available Plugins
 
 SiteLink can be extended with plugins placed inside the `Plugins` directory.  
