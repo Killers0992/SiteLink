@@ -61,12 +61,4 @@ public class TextToyComponent : AdminToyBaseComponent
         }
     }
 
-    void AfterSerialize(NetworkWriter writer, bool initial)
-    {
-        if (initial)
-        {
-            writer.WriteUInt(0);
-        }
-    }
-
 }

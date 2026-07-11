@@ -578,11 +578,10 @@ namespace SiteLink.API.Networking
                     BeginShutdownRecovery();
                     return;
 
+                // Happens when client losts connection with the server, usually due to network issues.
                 case DisconnectReason.Timeout:
-                    SiteLinkLogger.Info($"{Connection?.Tag} Server timeout! " + disconnectInfo.Reason + " " + disconnectInfo.SocketErrorCode);
-                    Status = SessionStatus.Timeout;
-                    Disconnect();
-                    break;
+                    BeginShutdownRecovery();
+                    return;
 
                 case DisconnectReason.ConnectionFailed when disconnectInfo.AdditionalData.RawData == null:
                     OnServerOffline.Invoke(new ServerOfflineResponse(ConnectingToServer, ConnectToServers.Count == 0));

@@ -3,7 +3,7 @@ namespace SiteLink.API.Networking.Objects;
 
 //
 // Name: Warhead Controller
-// NetworkID: 435
+// NetworkID: 439
 // AssetID: 180257209
 // SceneID: 3656837582862294845
 // Path: GameManager/Announcement Sources/Warhead Controller
@@ -13,7 +13,7 @@ public class WarheadControllerObject : NetworkObject
     public const uint ObjectAssetId = 180257209;
     public const ulong ObjectSceneId = 3656837582862294845;
 
-    public override uint NetworkId { get; set; } = 435;
+    public override uint NetworkId { get; set; } = 439;
     public override uint AssetId { get; } = ObjectAssetId;
     public override ulong SceneId { get; } = ObjectSceneId;
     public AlphaWarheadControllerComponent AlphaWarheadController { get; }

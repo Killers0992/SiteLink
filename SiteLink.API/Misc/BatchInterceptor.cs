@@ -74,7 +74,7 @@
                     continue;
                 }
 
-                /*switch (id)
+                switch (id)
                 {
 
                     case NetworkMessages.NetworkPongMessage:
@@ -85,7 +85,7 @@
                     default:
                         SiteLinkLogger.Info(NetworkMessages.GetMessageName(id) + $" {FormatBytes(size)} ", Direction.ToString());
                         break;
-                }*/
+                }
 
                 List<MessageHandler> handlers = _handlers[id];
                 if (handlers == null)

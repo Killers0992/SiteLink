@@ -3,7 +3,7 @@ namespace SiteLink.API.Networking.Objects;
 
 //
 // Name: Last Human Tracker
-// NetworkID: 440
+// NetworkID: 444
 // AssetID: 180257209
 // SceneID: 3656837584072672767
 // Path: GameManager/Last Human Tracker
@@ -13,7 +13,7 @@ public class LastHumanTrackerObject : NetworkObject
     public const uint ObjectAssetId = 180257209;
     public const ulong ObjectSceneId = 3656837584072672767;
 
-    public override uint NetworkId { get; set; } = 440;
+    public override uint NetworkId { get; set; } = 444;
     public override uint AssetId { get; } = ObjectAssetId;
     public override ulong SceneId { get; } = ObjectSceneId;
 
