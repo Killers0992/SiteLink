@@ -1,0 +1,59 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*.*.*'
+
+env:
+  SL_REFERENCES: ${{ github.workspace }}/References
+  UNITY_REFERENCES: ${{ github.workspace }}/References
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main repository.
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download SCP:SL references
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://exmod-team.github.io/SL-References/Dev.zip" -OutFile "References.zip"
+          Expand-Archive -Path "References.zip" -DestinationPath "${{ env.SL_REFERENCES }}" -Force
+
+      - name: Publish SiteLink (Linux)
+        run: dotnet publish SiteLink/SiteLink.csproj -c Release -r linux-x64 --self-contained -o publish/linux
+
+      - name: Publish SiteLink (Windows)
+        run: dotnet publish SiteLink/SiteLink.csproj -c Release -r win-x64 --self-contained -o publish/windows
+
+      - name: Build SiteLink.Generator plugin (LabAPI, net48)
+        run: dotnet build SiteLink.Generator/SiteLink.Generator.csproj -c Release -o publish/generator
+
+      - name: Stage release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path assets | Out-Null
+          Copy-Item publish/linux/SiteLink                    assets/SiteLink
+          Copy-Item publish/windows/SiteLink.exe              assets/SiteLink.exe
+          Copy-Item publish/generator/SiteLink.Generator.dll  assets/SiteLink.Generator.dll
+          Get-ChildItem assets
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            assets/SiteLink
+            assets/SiteLink.exe
+            assets/SiteLink.Generator.dll
