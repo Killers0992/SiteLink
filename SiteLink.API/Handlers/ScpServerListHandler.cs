@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Org.BouncyCastle.Crypto;
 
 namespace SiteLink.API.Handlers;
@@ -41,7 +41,7 @@ public class ScpServerListHandler : IDisposable
     {
         _cancellationToken = cancellationToken;
 
-        _apiClient = new SiteLinkApiClient("SCP SL", SiteLinkAPI.GameVersionText);
+        _apiClient = new SiteLinkApiClient("SCPSL", SiteLinkAPI.GameVersionText);
     }
 
     public async Task InitializeAsync()
@@ -59,7 +59,7 @@ public class ScpServerListHandler : IDisposable
         if (!File.Exists("verkey.txt"))
             File.WriteAllText("verkey.txt", "none");
 
-        _verKey ??= File.ReadAllText("verkey.txt");
+        _verKey ??= File.ReadAllText("verkey.txt").Trim();
 
         if (string.IsNullOrEmpty(_verKey))
             return;
@@ -451,7 +451,7 @@ public class ScpServerListHandler : IDisposable
         if (listener == null)
             throw new ArgumentNullException(nameof(listener), "Listener is null or not initialized.");
 
-        using var apiClient = new SiteLinkApiClient("SCP SL", SiteLinkAPI.GameVersionText);
+        using var apiClient = new SiteLinkApiClient("SCPSL", SiteLinkAPI.GameVersionText);
 
         Dictionary<string, string> data = new Dictionary<string, string>
         {
