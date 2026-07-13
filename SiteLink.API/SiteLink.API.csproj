@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -49,6 +49,10 @@
 		<Reference Include="mscorlib" Condition="'$(TargetFramework)' == 'net48'">
 			<HintPath>$(SL_REFERENCES)\mscorlib.dll</HintPath>
 		</Reference>
+
+		<Reference Include="CommandSystem.Core" Condition="'$(TargetFramework)' == 'net48'">
+			<HintPath>$(SL_REFERENCES)\CommandSystem.Core.dll</HintPath>
+		</Reference>
 		
 		<Reference Include="BouncyCastle.Cryptography">
 			<HintPath>$(SL_REFERENCES)\BouncyCastle.Cryptography.dll</HintPath>
@@ -77,7 +81,7 @@
 	</ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net48'">
-		<Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="C:\Users\Kille\AppData\Roaming\SCP Secret Laboratory\LabAPI\dependencies\global" />
+		<Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="C:\Users\Kille\AppData\Roaming\SCP Secret Laboratory\LabAPI\dependencies\global" ContinueOnError="WarnAndContinue" />
 	</Target>
 
 </Project>

@@ -1,4 +1,4 @@
-﻿namespace SiteLink.API.Misc
+namespace SiteLink.API.Misc
 {
     public delegate InterceptResult MessageHandler(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session);
 
@@ -83,7 +83,10 @@
                     case NetworkMessages.TimeSnapshotMessage:
                         break;
                     default:
-                        SiteLinkLogger.Info(NetworkMessages.GetMessageName(id) + $" {FormatBytes(size)} ", Direction.ToString());
+                        if (SiteLinkSettings.Singleton != null && SiteLinkSettings.Singleton.DebugMode)
+                        {
+                            SiteLinkLogger.Info(NetworkMessages.GetMessageName(id) + $" {FormatBytes(size)} ", Direction.ToString());
+                        }
                         break;
                 }
 

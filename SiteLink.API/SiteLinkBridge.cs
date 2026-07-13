@@ -1,4 +1,4 @@
-﻿using LiteNetLib;
+using LiteNetLib;
 using LiteNetLib.Utils;
 using System.Collections.Concurrent;
 using UnityEngine;
@@ -23,6 +23,12 @@ public static class SiteLinkBridge
 #endif
 
     private static readonly ConcurrentDictionary<ushort, List<SiteLinkMessageHandler>> _handlers = new();
+
+    public const ushort MsgTargetServersList = 17150;
+
+#if NET48
+    public static System.Collections.Generic.List<string> TargetServers { get; private set; } = new System.Collections.Generic.List<string>();
+#endif
 
 #if NET10_0
 
@@ -145,6 +151,20 @@ public static class SiteLinkBridge
             Dispatch(messageId, reader);
         };
 
+        RegisterHandler(MsgTargetServersList, reader =>
+        {
+            int count = reader.GetInt();
+            var list = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < count; i++)
+            {
+                string name = reader.GetString();
+                string ip = reader.GetString();
+                int port = reader.GetInt();
+                list.Add($"{name} ({ip}:{port})");
+            }
+            TargetServers = list;
+        });
+
         _manager = new NetManager(_listener);
         _manager.Start();
 
@@ -158,6 +178,8 @@ public static class SiteLinkBridge
     {
         _serverPeers[server] = peer;
 
+        SendTargetServersList(server);
+
         // Fire connected event
         BridgeConnectedHandler[] copy;
         lock (_connectedHandlers) copy = _connectedHandlers.ToArray();
@@ -165,6 +187,21 @@ public static class SiteLinkBridge
         {
             try { h(server); } catch { }
         }
+    }
+
+    public static void SendTargetServersList(Server server)
+    {
+        SendTo(server, MsgTargetServersList, writer =>
+        {
+            var servers = Server.List;
+            writer.Put(servers.Count);
+            foreach (var s in servers)
+            {
+                writer.Put(s.Name ?? string.Empty);
+                writer.Put(s.IpAddress ?? string.Empty);
+                writer.Put(s.Port);
+            }
+        });
     }
 
     public static bool DetachServerPeer(Server server, DisconnectInfo info)
@@ -187,8 +224,28 @@ public static class SiteLinkBridge
 #endif
 
 #if NET48
+    private static bool _gshRegistered = false;
+    private static void RegisterGshCommandSafe()
+    {
+        if (_gshRegistered) return;
+        if (RemoteAdmin.QueryProcessor.DotCommandHandler == null) return;
+
+        try
+        {
+            RemoteAdmin.QueryProcessor.DotCommandHandler.RegisterCommand(new GshCommand());
+            _gshRegistered = true;
+            ServerConsole.AddLog("SiteLink: Registered .gsh console command.");
+        }
+        catch (Exception ex)
+        {
+            ServerConsole.AddLog("SiteLink: Failed to register .gsh command: " + ex);
+        }
+    }
+
     public static void Update()
     {
+        RegisterGshCommandSafe();
+
         if (_manager == null)
             return;
 
@@ -301,3 +358,31 @@ public static class SiteLinkBridge
         }
     }
 }
+
+#if NET48
+public class GshCommand : CommandSystem.ICommand
+{
+    public string Command => "gsh";
+    public string[] Aliases => new[] { "ghs" };
+    public string Description => "Displays the target servers of the Hub server.";
+
+    public bool Execute(System.ArraySegment<string> arguments, CommandSystem.ICommandSender sender, out string response)
+    {
+        var servers = SiteLinkBridge.TargetServers;
+        if (servers == null || servers.Count == 0)
+        {
+            response = "No target servers registered on the Hub server.";
+            return false;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Hub Server targets:");
+        foreach (var server in servers)
+        {
+            sb.AppendLine($"- {server}");
+        }
+        response = sb.ToString();
+        return true;
+    }
+}
+#endif
