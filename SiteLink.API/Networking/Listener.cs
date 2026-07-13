@@ -1,4 +1,4 @@
-﻿using RelativePositioning;
+using RelativePositioning;
 using SiteLink.API.Events;
 using SiteLink.API.Events.Args;
 using SiteLink.API.Metrics;
@@ -316,7 +316,7 @@ public class Listener : IDisposable
     {
         try
         {
-            using var client = new SiteLinkApiClient("SCP SL", GameVersion.ToString(3));
+            using var client = new SiteLinkApiClient("SCPSL", GameVersion.ToString(3));
             string str = await client.GetPublicIpAddressAsync();
 
             str = (str.EndsWith(".") ? str.Remove(str.Length - 1) : str);

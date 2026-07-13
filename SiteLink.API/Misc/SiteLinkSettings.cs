@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 namespace SiteLink.API.Misc;
 
@@ -132,4 +132,7 @@ public class SiteLinkSettings
     /// </summary>
     [Description("Number of automatic reconnect attempts before redirecting to a fallback server or disconnecting.")]
     public int MaximumReconnectAttempts { get; set; } = 5;
+
+    [Description("Enables detailed network package logging (causes massive log output).")]
+    public bool DebugMode { get; set; } = false;
 }

@@ -14,7 +14,7 @@ public class SiteLinkApiClient : IDisposable
     private readonly string _userAgent;
     private readonly string _gameVersion;
 
-    public SiteLinkApiClient(string userAgent = "SCP SL", string gameVersion = null)
+    public SiteLinkApiClient(string userAgent = "SCPSL", string gameVersion = null)
     {
         _userAgent = userAgent;
         _gameVersion = gameVersion ?? SiteLinkAPI.GameVersionText;
@@ -24,6 +24,7 @@ public class SiteLinkApiClient : IDisposable
             Timeout = TimeSpan.FromSeconds(30),
             ThrowOnAnyError = false,
             FailOnDeserializationError = false,
+            UserAgent = _userAgent
         };
 
         _client = new RestClient(options, configureSerialization: s => s.UseNewtonsoftJson());
@@ -36,7 +37,6 @@ public class SiteLinkApiClient : IDisposable
         where T : class
     {
         var request = new RestRequest(endpoint, Method.Get)
-            .AddHeader("User-Agent", _userAgent)
             .AddHeader("Game-Version", _gameVersion);
 
         var response = await _client.ExecuteAsync<T>(request, ct).ConfigureAwait(false);
@@ -53,7 +53,6 @@ public class SiteLinkApiClient : IDisposable
     public async Task<string> GetRawAsync(string endpoint, CancellationToken ct = default)
     {
         var request = new RestRequest(endpoint, Method.Get)
-            .AddHeader("User-Agent", _userAgent)
             .AddHeader("Game-Version", _gameVersion);
 
         var response = await _client.ExecuteAsync(request, ct).ConfigureAwait(false);
@@ -71,7 +70,6 @@ public class SiteLinkApiClient : IDisposable
         where T : class
     {
         var request = new RestRequest(endpoint, Method.Post)
-            .AddHeader("User-Agent", _userAgent)
             .AddHeader("Game-Version", _gameVersion);
 
         foreach (var kvp in formData)
@@ -93,7 +91,6 @@ public class SiteLinkApiClient : IDisposable
     public async Task<string> PostFormRawAsync(string endpoint, Dictionary<string, string> formData, CancellationToken ct = default)
     {
         var request = new RestRequest(endpoint, Method.Post)
-            .AddHeader("User-Agent", _userAgent)
             .AddHeader("Game-Version", _gameVersion);
 
         foreach (var kvp in formData)
@@ -116,7 +113,6 @@ public class SiteLinkApiClient : IDisposable
         where T : class
     {
         var request = new RestRequest(endpoint, Method.Post)
-            .AddHeader("User-Agent", _userAgent)
             .AddHeader("Game-Version", _gameVersion)
             .AddJsonBody(body);
 
