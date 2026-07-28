@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 namespace SiteLink.API.Models;
 
@@ -44,4 +44,10 @@ public class ServerListSettings
     /// </summary>
     [Description("Optional server name to copy player count from (use empty to disable).")]
     public string TakePlayerCountFromServer { get; set; } = string.Empty;
+
+    /// <summary>
+    /// If true, the server will be published as transparently modded on the SCP:SL server list.
+    /// </summary>
+    [Description("If true, sets modded and tModded to True on the SCP:SL server list update.")]
+    public bool TransparentlyModded { get; set; } = false;
 }
