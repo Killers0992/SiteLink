@@ -9,6 +9,7 @@ namespace SiteLink.API.Networking
         public static SessionManager Singleton { get; private set; }
 
         private const double DefaultSessionExpirationSeconds = 10.0;
+        private readonly Lazy<DisconnectServer> _disconnectServer = new(() => new DisconnectServer());
 
         public ConcurrentDictionary<string, SessionSlot> Slots { get; } = new();
 
@@ -28,14 +29,19 @@ namespace SiteLink.API.Networking
 
                 try
                 {
-                    if (slot.Active != null)
-                        UpdateOneSession(userId, slot, isPending: false, session: slot.Active, now);
+                    lock (slot)
+                    {
+                        if (!IsCurrentSlot(userId, slot))
+                            continue;
 
-                    if (slot.Pending != null)
-                        UpdateOneSession(userId, slot, isPending: true, session: slot.Pending, now);
+                        if (slot.Active != null)
+                            UpdateOneSession(userId, slot, isPending: false, session: slot.Active, now);
 
-                    if (slot.Active == null && slot.Pending == null)
-                        Slots.TryRemove(userId, out _);
+                        if (slot.Pending != null)
+                            UpdateOneSession(userId, slot, isPending: true, session: slot.Pending, now);
+                    }
+
+                    RemoveSlotIfEmpty(userId, slot);
                 }
                 catch (Exception ex)
                 {
@@ -122,83 +128,159 @@ namespace SiteLink.API.Networking
 
         private void SafeKill(Session session, string reason)
         {
+            if (session == null)
+                return;
+
             try { session.Disconnect(reason); } catch { }
+            DisposeSession(session);
+        }
+
+        private void DisposeSession(Session session)
+        {
+            if (session == null)
+                return;
+
+            if (_disconnectServer.IsValueCreated)
+                _disconnectServer.Value.Cancel(session);
+
             try { session.Dispose(); } catch { }
+        }
+
+        private bool IsCurrentSlot(string userId, SessionSlot slot) =>
+            Slots.TryGetValue(userId, out SessionSlot current) && ReferenceEquals(current, slot);
+
+        internal void RemoveSlotIfEmpty(string userId, SessionSlot slot)
+        {
+            lock (slot)
+            {
+                if (slot.Active != null || slot.Pending != null || !IsCurrentSlot(userId, slot))
+                    return;
+
+                ((ICollection<KeyValuePair<string, SessionSlot>>)Slots).Remove(
+                    new KeyValuePair<string, SessionSlot>(userId, slot));
+            }
         }
 
         public Session CreateOrSwitchSession(RemoteConnection connection, Server[] servers, bool silent)
         {
             string userId = connection.PreAuth.UserId;
 
-            SessionSlot slot = Slots.GetOrAdd(userId, _ => new SessionSlot());
-
-            if (slot.Active == null && slot.Pending == null)
+            while (true)
             {
-                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+                SessionSlot slot = Slots.GetOrAdd(userId, _ => new SessionSlot());
+                Session replaced = null;
+                Session created;
 
-                WireSessionCallbacks(slot.Pending, connection, false);
+                lock (slot)
+                {
+                    if (!IsCurrentSlot(userId, slot))
+                        continue;
 
-                return slot.Pending;
+                    if (slot.Active == null && slot.Pending == null)
+                    {
+                        created = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+                        WireSessionCallbacks(created, connection, false);
+                        slot.Pending = created;
+                    }
+                    else if (slot.Active != null && slot.Active.Status == SessionStatus.Connected)
+                    {
+                        if (slot.Pending != null && silent)
+                            return null;
+
+                        replaced = slot.Pending;
+                        created = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+                        WireSessionCallbacks(created, connection, isPending: true);
+                        slot.Pending = created;
+                    }
+                    else
+                    {
+                        replaced = slot.Active;
+                        created = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+                        WireSessionCallbacks(created, connection, isPending: false);
+                        slot.Active = created;
+                        created.AttachToConnection(connection);
+                        connection.Session = created;
+                    }
+                }
+
+                if (replaced != null)
+                {
+                    try { replaced.Disconnect(FormatSessionReplaced(replaced)); } catch { }
+                    DisposeSession(replaced);
+                }
+
+                return created;
             }
+        }
 
-            // If there is an active connected session, create a pending one
-            if (slot.Active != null && slot.Active.Status == SessionStatus.Connected)
+        internal bool BeginDisconnect(RemoteConnection connection, string message)
+        {
+            if (connection?.Request == null || message == null)
+                return false;
+
+            string userId = connection.PreAuth.UserId;
+            DisconnectServer server = _disconnectServer.Value;
+
+            while (true)
             {
-                // If pending sessions exists and its silent prevent from creating new one right away.
-                if (slot.Pending != null && silent)
-                    return null;
+                SessionSlot slot = Slots.GetOrAdd(userId, _ => new SessionSlot());
+                Session oldPending;
+                Session oldActive;
 
-                // Dispose any old pending attempt
-                if (slot.Pending != null)
-                    slot.Pending.Disconnect(FormatSessionReplaced(slot.Pending));
-                slot.Pending?.Dispose();
+                lock (slot)
+                {
+                    if (!IsCurrentSlot(userId, slot))
+                        continue;
 
-                slot.Pending = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
+                    Session session = new Session(
+                        connection,
+                        new Server[] { server },
+                        Thread.CurrentThread.ManagedThreadId,
+                        isSilent: true);
 
-                WireSessionCallbacks(slot.Pending, connection, isPending: true);
+                    server.Prepare(session, message);
 
-                //SiteLinkLogger.Info($"{connection.Tag} Created PENDING session to switch servers.");
+                    oldPending = slot.Pending;
+                    oldActive = slot.Active;
+                    slot.Pending = session;
+                    slot.Active = null;
+                    connection.Session = null;
+                }
 
-                return slot.Pending;
+                DisposeSession(oldPending);
+                if (!ReferenceEquals(oldActive, oldPending))
+                    DisposeSession(oldActive);
+
+                return true;
             }
-
-            // Otherwise create/replace active
-            if (slot.Active != null)
-                slot.Active.Disconnect(FormatSessionReplaced(slot.Active));
-            slot.Active?.Dispose();
-
-            slot.Active = new Session(connection, servers, Thread.CurrentThread.ManagedThreadId, silent);
-
-            WireSessionCallbacks(slot.Active, connection, isPending: false);
-
-            slot.Active.AttachToConnection(connection);
-
-            //SiteLinkLogger.Info($"{connection.Tag} Created ACTIVE session.");
-
-            connection.Session = slot.Active;
-
-            return slot.Active;
         }
 
         public void PromotePendingToActive(string userId, Session pending)
         {
+            Session oldActive;
+
             if (!Slots.TryGetValue(userId, out SessionSlot slot))
                 return;
 
-            if (slot.Pending != pending)
-                return;
+            lock (slot)
+            {
+                if (!IsCurrentSlot(userId, slot) || slot.Pending != pending)
+                    return;
 
-            Session oldActive = slot.Active;
+                oldActive = slot.Active;
+
+                if (oldActive?.Connection != null)
+                    oldActive.Connection.IsSwitchingServers = true;
+
+                slot.Active = pending;
+                slot.Pending = null;
+            }
 
             if (oldActive != null)
-                oldActive.Connection.IsSwitchingServers = true;
-
-            slot.Active = pending;
-            slot.Pending = null;
-
-            if (oldActive != null)
-                oldActive.Disconnect(FormatSessionReplaced(oldActive));
-            oldActive?.Dispose();
+            {
+                try { oldActive.Disconnect(FormatSessionReplaced(oldActive)); } catch { }
+                DisposeSession(oldActive);
+            }
 
             //SiteLinkLogger.Info($"Promoted pending session to ACTIVE for user {userId}.");
         }
@@ -208,47 +290,63 @@ namespace SiteLink.API.Networking
             if (!Slots.TryGetValue(userId, out SessionSlot slot))
                 return;
 
+            lock (slot)
+            {
+                if (!IsCurrentSlot(userId, slot) || slot.Pending != pending)
+                    return;
 
-            if (slot.Pending != pending)
-                return;
+                slot.Pending = null;
+            }
 
             SiteLinkLogger.Info($"{pending.Connection.Tag} Server (f=yellow){pending.ConnectingToServer.Name}(f=white) is (f=green){reason}(f=white)");
-            slot.Pending = null;
-
-            pending.Disconnect(reason);
-            pending.Dispose();
+            try { pending.Disconnect(reason); } catch { }
+            DisposeSession(pending);
+            RemoveSlotIfEmpty(userId, slot);
         }
 
         public bool TryReattachConnection(RemoteConnection connection)
         {
-            if (!Slots.TryGetValue(connection.PreAuth.UserId, out var slot) || slot.Active == null)
-                return false;
+            string userId = connection.PreAuth.UserId;
 
-            Session s = slot.Active;
+            while (Slots.TryGetValue(userId, out SessionSlot slot))
+            {
+                lock (slot)
+                {
+                    if (!IsCurrentSlot(userId, slot))
+                        continue;
 
-            if (s.Status != SessionStatus.Connected || s.AliveUntil < DateTime.UtcNow)
-                return false;
+                    Session s = slot.Active;
+                    if (s == null || s.Status != SessionStatus.Connected || s.AliveUntil < DateTime.UtcNow)
+                        return false;
 
-            s.AttachToConnection(connection);
+                    s.AttachToConnection(connection);
+                    connection.AcceptRequest();
+                    connection.Session = s;
+                    connection.AsServer.Scene("Facility");
 
-            connection.AcceptRequest();
-            connection.Session = s;
+                    if (!s.Server.IsSimulated)
+                        connection.AsServer.Seed(s.MapSeed);
 
-            connection.AsServer.Scene("Facility");
+                    return true;
+                }
+            }
 
-            if (!s.Server.IsSimulated)
-                connection.AsServer.Seed(s.MapSeed);
-
-            return true;
+            return false;
         }
 
         public void DetachClient(string userId, string reason = null)
         {
-            if (!Slots.TryGetValue(userId, out var slot) || slot.Active == null)
+            if (!Slots.TryGetValue(userId, out SessionSlot slot))
                 return;
 
-            slot.Active.DetachFromConnection();
-            slot.Active.AliveUntil = DateTime.UtcNow.AddSeconds(DefaultSessionExpirationSeconds);
+            lock (slot)
+            {
+                if (!IsCurrentSlot(userId, slot) || slot.Active == null)
+                    return;
+
+                slot.Active.DetachFromConnection();
+                slot.Active.AliveUntil = DateTime.UtcNow.AddSeconds(DefaultSessionExpirationSeconds);
+            }
 
             //SiteLinkLogger.Info($"Session detached for {userId} {reason}, expires in {DefaultSessionExpirationSeconds}s...");
         }
@@ -376,22 +474,28 @@ namespace SiteLink.API.Networking
 
         public void DestroyAllForUser(string userId, string reason)
         {
-            if (!Slots.TryGetValue(userId, out var slot))
+            while (Slots.TryGetValue(userId, out SessionSlot slot))
+            {
+                Session pending;
+                Session active;
+
+                lock (slot)
+                {
+                    if (!IsCurrentSlot(userId, slot))
+                        continue;
+
+                    pending = slot.Pending;
+                    active = slot.Active;
+                    slot.Pending = null;
+                    slot.Active = null;
+                    RemoveSlotIfEmpty(userId, slot);
+                }
+
+                SafeKill(pending, reason);
+                if (!ReferenceEquals(active, pending))
+                    SafeKill(active, reason);
                 return;
-
-            if (slot.Pending != null)
-            {
-                SafeKill(slot.Pending, reason);
-                slot.Pending = null;
             }
-
-            if (slot.Active != null)
-            {
-                SafeKill(slot.Active, reason);
-                slot.Active = null;
-            }
-
-            Slots.TryRemove(userId, out _);
         }
     }
 }
