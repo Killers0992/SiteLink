@@ -27,6 +27,9 @@ env:
   WINDOWS_OUTPUT: "${{ github.workspace }}/publish/win-x64"
   LINUX_OUTPUT: "${{ github.workspace }}/publish/linux-x64"
 
+  SL_REFERENCES: "${{ github.workspace }}/References"
+  UNITY_REFERENCES: "${{ github.workspace }}/References"
+
 jobs:
   build:
     name: Build and publish release
