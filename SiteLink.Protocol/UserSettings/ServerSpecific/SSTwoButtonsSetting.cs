@@ -25,6 +25,14 @@ namespace UserSettings.ServerSpecific
 			base.HintDescription = hint;
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteString (OptionA);
+			writer.WriteString (OptionB);
+			writer.WriteBool (DefaultIsB);
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 			SyncIsB = DefaultIsB;

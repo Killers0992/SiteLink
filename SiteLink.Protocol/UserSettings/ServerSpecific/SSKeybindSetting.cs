@@ -24,6 +24,14 @@ namespace UserSettings.ServerSpecific
 			base.HintDescription = hint;
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteBool (PreventInteractionOnGUI);
+			writer.WriteBool (AllowSpectatorTrigger);
+			writer.WriteInt ((int)SuggestedKey);
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 			SyncIsPressed = false;

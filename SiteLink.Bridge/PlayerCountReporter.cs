@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using LabApi.Features.Wrappers;
 using UnityEngine;
 using SiteLink.API;
@@ -187,10 +188,19 @@ namespace SiteLink.Bridge
 
         private sealed class PlayerCountTicker : MonoBehaviour
         {
-            private void Start()
+            // Idle mode sets Time.timeScale to 0.01, and InvokeRepeating runs on scaled time,
+            // so a 5 second interval turned into 500 real seconds the moment the server went
+            // idle. The proxy then hit its 30 second bridge timeout and fell back to counting
+            // its own sessions. A stopwatch is the only clock idle mode cannot slow down.
+            private readonly Stopwatch _sinceLastTick = Stopwatch.StartNew();
+
+            private void Update()
             {
-                float interval = Interval;
-                InvokeRepeating(nameof(Tick), interval, interval);
+                if (_sinceLastTick.Elapsed.TotalSeconds < Interval)
+                    return;
+
+                _sinceLastTick.Restart();
+                Tick();
             }
 
             private void Tick()
@@ -201,8 +211,8 @@ namespace SiteLink.Bridge
                 }
                 catch (Exception ex)
                 {
-                    // A throwing report must not kill the repeating invoke, otherwise the
-                    // proxy silently falls back to its own inaccurate count forever.
+                    // A throwing report must not kill the ticker, otherwise the proxy
+                    // silently falls back to its own inaccurate count forever.
                     SiteLinkBridgePlugin.LogError($"Player count report failed: {ex}");
                 }
 

@@ -38,6 +38,17 @@ namespace UserSettings.ServerSpecific
 			DefaultOptionIndex = defaultOptionIndex;
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteByte ((byte)DefaultOptionIndex);
+			writer.WriteByte ((byte)EntryType);
+			writer.WriteByte ((byte)Options.Length);
+			foreach (string option in Options) {
+				writer.WriteString (option);
+			}
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 			SyncSelectionIndexRaw = DefaultOptionIndex;
