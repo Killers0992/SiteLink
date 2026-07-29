@@ -1,0 +1,178 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 1.0.0 or v1.0.0"
+        required: true
+        type: string
+
+      prerelease:
+        description: "Mark this release as a prerelease"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  DOTNET_VERSION: "10.0.x"
+
+  PROJECT_PATH: "SiteLink/SiteLink.csproj"
+
+  ASSEMBLY_NAME: "SiteLink"
+
+  WINDOWS_RUNTIME: "win-x64"
+  LINUX_RUNTIME: "linux-x64"
+
+  WINDOWS_OUTPUT: "${{ github.workspace }}/publish/win-x64"
+  LINUX_OUTPUT: "${{ github.workspace }}/publish/linux-x64"
+
+jobs:
+  build:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "${{ env.DOTNET_VERSION }}"
+
+      - name: Validate and prepare version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          # Remove an optional "v" prefix.
+          VERSION="${VERSION#v}"
+
+          # Accepted examples:
+          # 1.0.0
+          # 1.0.0-beta
+          # 1.0.0-beta.1
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version '$VERSION'. Use a version such as 1.0.0 or 1.0.0-beta.1."
+            exit 1
+          fi
+
+          TAG="v${VERSION}"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          echo "Building SiteLink release $TAG"
+
+      - name: Check whether tag already exists
+        shell: bash
+        env:
+          TAG: "${{ steps.version.outputs.tag }}"
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null 2>&1; then
+            echo "::error::Tag '$TAG' already exists."
+            exit 1
+          fi
+
+      - name: Restore project
+        run: |
+          dotnet restore "${{ env.PROJECT_PATH }}"
+
+      - name: Publish Windows x64
+        run: |
+          dotnet publish "${{ env.PROJECT_PATH }}" \
+            --configuration Release \
+            --runtime "${{ env.WINDOWS_RUNTIME }}" \
+            --self-contained true \
+            --no-restore \
+            --output "${{ env.WINDOWS_OUTPUT }}" \
+            -p:Version="${{ steps.version.outputs.version }}" \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false
+
+      - name: Publish Linux x64
+        run: |
+          dotnet publish "${{ env.PROJECT_PATH }}" \
+            --configuration Release \
+            --runtime "${{ env.LINUX_RUNTIME }}" \
+            --self-contained true \
+            --no-restore \
+            --output "${{ env.LINUX_OUTPUT }}" \
+            -p:Version="${{ steps.version.outputs.version }}" \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false
+
+      - name: Verify published applications
+        shell: bash
+        run: |
+          WINDOWS_FILE="${{ env.WINDOWS_OUTPUT }}/${{ env.ASSEMBLY_NAME }}.exe"
+          LINUX_FILE="${{ env.LINUX_OUTPUT }}/${{ env.ASSEMBLY_NAME }}"
+
+          if [[ ! -f "$WINDOWS_FILE" ]]; then
+            echo "::error::Windows executable was not found at: $WINDOWS_FILE"
+            find "${{ env.WINDOWS_OUTPUT }}" -maxdepth 2 -type f -print || true
+            exit 1
+          fi
+
+          if [[ ! -f "$LINUX_FILE" ]]; then
+            echo "::error::Linux executable was not found at: $LINUX_FILE"
+            find "${{ env.LINUX_OUTPUT }}" -maxdepth 2 -type f -print || true
+            exit 1
+          fi
+
+          chmod +x "$LINUX_FILE"
+
+          echo "WINDOWS_FILE=$WINDOWS_FILE" >> "$GITHUB_ENV"
+          echo "LINUX_FILE=$LINUX_FILE" >> "$GITHUB_ENV"
+
+          echo "Windows application: $WINDOWS_FILE"
+          echo "Linux application:   $LINUX_FILE"
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiteLink-win-x64
+          path: ${{ env.WINDOWS_FILE }}
+          if-no-files-found: error
+
+      - name: Upload Linux build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiteLink-linux-x64
+          path: ${{ env.LINUX_FILE }}
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          TAG: "${{ steps.version.outputs.tag }}"
+          IS_PRERELEASE: "${{ inputs.prerelease }}"
+        run: |
+          RELEASE_ARGUMENTS=(
+            "$TAG"
+            "$WINDOWS_FILE#SiteLink.exe"
+            "$LINUX_FILE#SiteLink"
+            --repo "$GITHUB_REPOSITORY"
+            --target "$GITHUB_SHA"
+            --title "SiteLink $TAG"
+            --generate-notes
+            --verify-tag=false
+          )
+
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            RELEASE_ARGUMENTS+=(--prerelease)
+          fi
+
+          gh release create "${RELEASE_ARGUMENTS[@]}"
