@@ -40,6 +40,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
+      - name: Download SCP SL references
+        uses: killers0992/scpsl.downloadfiles@master
+        with:
+          branch: "public"
+          filesToDownload: "BouncyCastle.Cryptography.dll,UnityEngine.CoreModule.dll,Mirror.dll,Assembly-CSharp.dll,Unity.TextMeshPro.dll"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
