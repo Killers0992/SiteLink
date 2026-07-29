@@ -175,7 +175,12 @@ namespace SiteLink.Bridge
                 Logger.Warn($"[SiteLink.Bridge] Disconnected from proxy {endpoint}: {info.Reason}. Retrying...");
         }
 
-        internal static void Log(string message) => Logger.Info($"[SiteLink.Bridge] {message}");
+        /// <summary>
+        /// Routine chatter - periodic reports and state churn. These fire every second on a
+        /// busy server, so they only reach the console when 'debug' is on.
+        /// </summary>
+        internal static void LogDebug(string message) =>
+            Logger.Debug($"[SiteLink.Bridge] {message}", Instance?.Config?.Debug ?? false);
 
         internal static void LogWarn(string message) => Logger.Warn($"[SiteLink.Bridge] {message}");
 

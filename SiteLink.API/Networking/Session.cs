@@ -271,6 +271,13 @@ namespace SiteLink.API.Networking
         public int MapSeed { get; private set; } = -1;
 
         public bool IsRestarting { get; private set; }
+
+        /// <summary>
+        /// Set on the replacement session that a shutdown/restart recovery creates, so that
+        /// connecting resumes the player in place instead of running the server-switch path.
+        /// </summary>
+        internal bool IsRecoveryRetry { get; set; }
+
         public bool IsReady { get; internal set; }
         public bool IsConnectionConnected => Connection != null;
         public bool IsConnectedToSimulated { get; private set; }
@@ -652,6 +659,12 @@ namespace SiteLink.API.Networking
                 return;
             }
 
+            if (IsRecoveryRetry)
+            {
+                ResumeAfterRecovery();
+                return;
+            }
+
             Connection.Session?.Stats.RecordServerSwitch();
 
             SessionManager.Singleton.PromotePendingToActive(
@@ -660,6 +673,41 @@ namespace SiteLink.API.Networking
             );
 
             Connection.AsServer.Reconnect();
+        }
+
+        /// <summary>
+        /// Hands the client over to this session after a shutdown/restart recovery reconnect,
+        /// without telling the client anything.
+        /// <para>
+        /// Recovery does not reconnect the old session, it builds a new one and swaps it in,
+        /// so the normal server-switch path used to run here. That path sends a
+        /// <c>RoundRestartMessage</c> (and, via the replaced session, a disconnect RPC), which
+        /// threw the player out of the proxy for the six seconds it took to re-authenticate,
+        /// destroyed the recovery hint that was the whole point, and occasionally surfaced as
+        /// a bare kick. From the client's point of view nothing happened here: the same
+        /// connection is now relayed to a freshly restarted server, and the server's own
+        /// <c>SceneMessage</c> reloads the facility for it.
+        /// </para>
+        /// </summary>
+        private void ResumeAfterRecovery()
+        {
+            // Take ownership of the connection first. PromotePendingToActive disconnects the
+            // session it replaces, and that disconnect only fires while the connection still
+            // points at the old session.
+            AttachToConnection(Connection);
+            Connection.Session = this;
+
+            SessionManager.Singleton.PromotePendingToActive(
+                Connection.PreAuth.UserId,
+                this
+            );
+
+            // Promotion marks the connection as switching servers so that the expected client
+            // disconnect detaches instead of destroying the session. No disconnect is coming,
+            // and leaving the flag set would make a genuine quit leak the session.
+            Connection.IsSwitchingServers = false;
+
+            IsRecoveryRetry = false;
         }
 
         private void OnConnected(NetPeer peer) => FinalizeConnection(ConnectingToServer, isSimulated: false);
@@ -965,6 +1013,10 @@ namespace SiteLink.API.Networking
                 _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
                 return;
             }
+
+            // The player never asked to change servers; they are being put back where they
+            // already were. Marking the retry keeps FinalizeConnection from kicking them.
+            retrySession.IsRecoveryRetry = true;
 
             _shutdownRetryAttemptsMade++;
             _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);

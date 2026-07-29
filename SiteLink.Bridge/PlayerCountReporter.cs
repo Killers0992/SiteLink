@@ -140,8 +140,8 @@ namespace SiteLink.Bridge
                 writer.Put(maxPlayers);
             });
 
-            if (changed && config != null && config.Debug)
-                SiteLinkBridgePlugin.Log($"Reported {players}/{maxPlayers} players to the proxies (excluded {dummies} dummies).");
+            if (changed)
+                SiteLinkBridgePlugin.LogDebug($"Reported {players}/{maxPlayers} players to the proxies (excluded {dummies} dummies).");
         }
 
         /// <summary>
@@ -170,8 +170,7 @@ namespace SiteLink.Bridge
                 writer.Put(maxPlayers);
             });
 
-            if (config != null && config.Debug)
-                SiteLinkBridgePlugin.Log($"Reported {players}/{maxPlayers} players to {endpoint} (excluded {dummies} dummies).");
+            SiteLinkBridgePlugin.LogDebug($"Reported {players}/{maxPlayers} players to {endpoint} (excluded {dummies} dummies).");
         }
 
         private static int GetMaxPlayers()

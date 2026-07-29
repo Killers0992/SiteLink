@@ -241,10 +241,7 @@ namespace SiteLink.Bridge
                 writer.Put(delaySeconds);
             });
 
-            BridgeConfig config = SiteLinkBridgePlugin.Instance?.Config;
-
-            if (config != null && config.Debug)
-                SiteLinkBridgePlugin.Log($"Reported round state {state} (restart: {restartType}, idle: {idle}, accepting: {accepting}) to the proxy.");
+            SiteLinkBridgePlugin.LogDebug($"Reported round state {state} (restart: {restartType}, idle: {idle}, accepting: {accepting}) to the proxy.");
         }
 
         private static void SendTo(BridgeEndpoint endpoint, BridgeRoundState state, BridgeRestartType restartType, bool idle, bool accepting, byte delaySeconds)
