@@ -32,6 +32,14 @@
 			<Private>False</Private>
 		</Reference>
 
+		<!-- Same reason as SiteLink.API: LiteNetLib's writer overloads inside
+		     Assembly-CSharp reference ReadOnlySpan<T>, which only the game's
+		     corlib defines. -->
+		<Reference Include="mscorlib">
+			<HintPath>$(SL_REFERENCES)\mscorlib.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+
 		<Reference Include="CommandSystem.Core">
 			<HintPath>$(SL_REFERENCES)\CommandSystem.Core.dll</HintPath>
 			<Private>False</Private>

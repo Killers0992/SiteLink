@@ -47,9 +47,12 @@
 			<HintPath>$(SL_REFERENCES)\Assembly-CSharp.dll</HintPath>
 		</Reference>
 
-		<!-- mscorlib comes from the .NET Framework reference assemblies. Referencing the
-		     game's Unity-flavoured copy instead makes the identity ambiguous on non-Windows
-		     build agents. -->
+		<!-- The game's Unity corlib, not the .NET Framework one: LiteNetLib inside
+		     Assembly-CSharp exposes ReadOnlySpan<T> overloads that net48 reference
+		     assemblies do not define. -->
+		<Reference Include="mscorlib" Condition="'$(TargetFramework)' == 'net48'">
+			<HintPath>$(SL_REFERENCES)\mscorlib.dll</HintPath>
+		</Reference>
 
 		<Reference Include="CommandSystem.Core" Condition="'$(TargetFramework)' == 'net48'">
 			<HintPath>$(SL_REFERENCES)\CommandSystem.Core.dll</HintPath>

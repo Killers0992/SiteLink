@@ -54,7 +54,7 @@ jobs:
         uses: killers0992/scpsl.downloadfiles@master
         with:
           branch: "public"
-          filesToDownload: "BouncyCastle.Cryptography.dll,UnityEngine.CoreModule.dll,Mirror.dll,Assembly-CSharp.dll,Unity.TextMeshPro.dll,CommandSystem.Core.dll"
+          filesToDownload: "BouncyCastle.Cryptography.dll,UnityEngine.CoreModule.dll,Mirror.dll,Assembly-CSharp.dll,Unity.TextMeshPro.dll,CommandSystem.Core.dll,mscorlib.dll"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
