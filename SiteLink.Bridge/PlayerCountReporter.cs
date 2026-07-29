@@ -6,10 +6,10 @@ using SiteLink.API;
 namespace SiteLink.Bridge
 {
     /// <summary>
-    /// Reports how many real players this game server is hosting to the proxy.
+    /// Reports how many real players this game server is hosting to every connected proxy.
     /// <para>
-    /// The proxy cannot count this itself: with more than one proxy in front of the same
-    /// game server, each proxy only sees the sessions it owns. CSGD 5.6 requires the number
+    /// A proxy cannot count this itself: with more than one proxy in front of the same game
+    /// server, each proxy only sees the sessions it owns. CSG 5.6 requires the number
     /// reported to the central servers to be accurate, so the game server is the only
     /// authority.
     /// </para>
@@ -108,9 +108,9 @@ namespace SiteLink.Bridge
         }
 
         /// <summary>
-        /// Counts the current players and pushes them to the proxy. Sending unconditionally
-        /// on a timer rather than only on change means a bridge reconnect heals itself
-        /// without any extra handshake.
+        /// Counts the current players and pushes them to every connected proxy. Sending
+        /// unconditionally on a timer rather than only on change means a bridge reconnect
+        /// heals itself without any extra handshake.
         /// </summary>
         public static void Report()
         {
@@ -140,7 +140,37 @@ namespace SiteLink.Bridge
             });
 
             if (changed && config != null && config.Debug)
-                SiteLinkBridgePlugin.Log($"Reported {players}/{maxPlayers} players to the proxy (excluded {dummies} dummies).");
+                SiteLinkBridgePlugin.Log($"Reported {players}/{maxPlayers} players to the proxies (excluded {dummies} dummies).");
+        }
+
+        /// <summary>
+        /// Reports the current count to one specific proxy. Used when a proxy connects late:
+        /// the other proxies are already up to date and must not be told again just to catch
+        /// this one up.
+        /// </summary>
+        public static void ReportTo(BridgeEndpoint endpoint)
+        {
+            BridgeConfig config = SiteLinkBridgePlugin.Instance?.Config;
+
+            if (config != null && !config.ReportPlayerCount)
+                return;
+
+            int players = CountPlayers(out int raw, out int dummies);
+            int maxPlayers = GetMaxPlayers();
+
+            LastRawCount = raw;
+            LastDummyCount = dummies;
+            LastReportedCount = players;
+            LastReportedMax = maxPlayers;
+
+            SiteLinkBridge.SendTo(endpoint, SiteLinkBridge.MsgPlayerCount, writer =>
+            {
+                writer.Put(players);
+                writer.Put(maxPlayers);
+            });
+
+            if (config != null && config.Debug)
+                SiteLinkBridgePlugin.Log($"Reported {players}/{maxPlayers} players to {endpoint} (excluded {dummies} dummies).");
         }
 
         private static int GetMaxPlayers()
@@ -174,6 +204,16 @@ namespace SiteLink.Bridge
                     // A throwing report must not kill the repeating invoke, otherwise the
                     // proxy silently falls back to its own inaccurate count forever.
                     SiteLinkBridgePlugin.LogError($"Player count report failed: {ex}");
+                }
+
+                try
+                {
+                    // Idle mode has no event to hook, so it rides along on this timer.
+                    RoundStateReporter.Poll();
+                }
+                catch (Exception ex)
+                {
+                    SiteLinkBridgePlugin.LogError($"Round state report failed: {ex}");
                 }
             }
         }

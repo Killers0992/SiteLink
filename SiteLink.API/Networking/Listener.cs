@@ -5,6 +5,7 @@ using SiteLink.API.Metrics;
 using SiteLink.API.Networking.Connections;
 using SiteLink.API.Threading;
 using System.Buffers;
+using UserSettings.ServerSpecific;
 using Extensions = SiteLink.API.Misc.Extensions;
 
 namespace SiteLink.API.Networking;
@@ -47,6 +48,7 @@ public class Listener : IDisposable
     private NetManager _manager;
     private EventBasedNetListener _listener;
     private int _index = -1;
+    private readonly ListenerSettings _customSettings;
 
     private readonly ConcurrentQueue<Connection> _connectionsToRemove = new();
     private readonly Timer _connectionCleanupTimer;
@@ -65,6 +67,9 @@ public class Listener : IDisposable
     {
         get
         {
+            if (_customSettings != null)
+                return _customSettings;
+
             if (_index == -1)
             {
                 _index = SiteLinkSettings.Singleton.Listeners.FindIndex(x => x.Name == Name);
@@ -115,9 +120,42 @@ public class Listener : IDisposable
 
     readonly NetDataWriter RequestWriter = new NetDataWriter();
 
-    public Listener(string name)
+    /// <summary>
+    /// Whether this listener only accepts bridge plugins. A bridge listener never serves game
+    /// clients and never publishes itself to the SCP:SL server list.
+    /// </summary>
+    public bool IsBridgeOnly { get; }
+
+    public Listener(string name) : this(name, null, false) { }
+
+    /// <summary>
+    /// Creates the single endpoint every bridge plugin connects to. Which game server a bridge
+    /// belongs to is decided by its secret key, so one endpoint is enough no matter how many
+    /// game servers are configured.
+    /// </summary>
+    public Listener(BridgeListenerSettings bridgeSettings) : this(
+        bridgeSettings.Name,
+        new ListenerSettings
+        {
+            Name = bridgeSettings.Name,
+            ListenAddress = bridgeSettings.ListenAddress,
+            ListenPort = bridgeSettings.ListenPort,
+            Priorities = [],
+            ServerList = new ServerListSettings
+            {
+                // A bridge endpoint has no game clients to advertise.
+                ShowServerOnServerList = false,
+            },
+        },
+        true)
+    { }
+
+    private Listener(string name, ListenerSettings customSettings, bool isBridgeOnly)
     {
         Name = name;
+
+        _customSettings = customSettings;
+        IsBridgeOnly = isBridgeOnly;
 
         _listener = new EventBasedNetListener();
         _listener.ConnectionRequestEvent += OnConnectionRequest;
@@ -153,6 +191,14 @@ public class Listener : IDisposable
         _connectionCleanupTimer = new Timer(CleanupStaleConnections, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
 
         Task.Run(() => RunEventPolling(Token), Token);
+
+        if (IsBridgeOnly)
+        {
+            SiteLinkLogger.Info($"{Tag} Listening for bridges on (f=green){ListenAddress}:{ListenPort}(f=white), every game server is matched by its bridge secret key");
+
+            EventManager.Listener.InvokeListenerRegistered(new ListenerRegisteredEvent(this));
+            return;
+        }
 
         SiteLinkLogger.Info($"{Tag} Listening for clients on (f=green){ListenAddress}:{ListenPort}(f=white), allow clients with game version (f=green){Settings.GameVersion.ParseVersion()}(f=white)");
 
@@ -254,11 +300,28 @@ public class Listener : IDisposable
 
     static InterceptResult OnSSSClientResponse(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
     {
-        //SSSClientResponse response = new SSSClientResponse(r);
+        SSSClientResponse response;
 
-        //session.Server?.OnSessionSSSReponse(session, response.Id);
+        try
+        {
+            response = new SSSClientResponse(r);
+        }
+        catch (Exception ex)
+        {
+            SiteLinkLogger.Warn($"{session?.Connection?.Tag} Malformed server-specific settings response: {ex.Message}");
+            return InterceptResult.Pass();
+        }
 
-        return InterceptResult.Pass();
+        // Everything below the proxy's id range belongs to the game server's own settings and
+        // has to reach it untouched.
+        if (response.Id < Server.ProxySettingIdBase)
+            return InterceptResult.Pass();
+
+        session?.Server?.OnSessionSSSReponse(session, response.Id);
+
+        // The game server has no setting with this id, so forwarding it would only make it
+        // allocate a placeholder setting for a control it does not own.
+        return InterceptResult.Drop();
     }
 
     static InterceptResult OnPosition(ushort id, NetworkReader r, ArraySegment<byte> original, Session session)
@@ -493,6 +556,14 @@ public class Listener : IDisposable
             return;
         }
 
+        // The bridge endpoint is not a game endpoint. Anything that is not a bridge gets
+        // rejected here instead of being routed to a backend server by accident.
+        if (IsBridgeOnly && preAuth.ClientType != ClientType.Bridge)
+        {
+            request.RejectWithReason(RequestWriter, RejectionReason.VerificationRejected);
+            return;
+        }
+
         switch (preAuth.ClientType)
         {
             case ClientType.Bridge:
@@ -501,6 +572,12 @@ public class Listener : IDisposable
                 LiteNetPeer peer = bridgeConnection.AcceptRequest();
 
                 bridgeConnection.TargetServer = preAuth.TargetServer;
+
+                // Without this the server never knows it has a bridge, so
+                // HasFreshBridgePlayerCount stays false forever and the listener silently
+                // keeps reporting its own session count to the central servers.
+                preAuth.TargetServer.BridgeConnection = bridgeConnection;
+
                 SiteLinkBridge.AttachServerPeer(preAuth.TargetServer, peer);
 
                 SiteLinkLogger.Info($"{bridgeConnection.Tag} {preAuth.TargetServer.Tag} Bridge connected!");

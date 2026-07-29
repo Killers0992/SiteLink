@@ -6,6 +6,7 @@ using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
 using RoundRestarting;
+using UserSettings.ServerSpecific;
 
 namespace SiteLink.API.Networking
 {
@@ -305,6 +306,64 @@ namespace SiteLink.API.Networking
             _serverToClient.Register(NetworkMessages.NetworkPingMessage, OnPing);
             _serverToClient.Register(NetworkMessages.SpawnMessage, OnSpawn);
             _serverToClient.Register(NetworkMessages.RoundRestartMessage, OnRestart);
+            _serverToClient.Register(NetworkMessages.SSSEntriesPack, OnServerSpecificEntries);
+        }
+
+        /// <summary>
+        /// True once the game server has sent its own server-specific settings for this
+        /// session. Until then there is nothing to append to.
+        /// </summary>
+        public bool HasGameServerSettings { get; private set; }
+
+        /// <summary>
+        /// Appends the proxy's own server-specific settings to the pack the game server
+        /// sends.
+        /// <para>
+        /// Sending a separate pack does not work: the client keeps one set of entries per
+        /// server, so whichever pack arrives last wins and the other side's settings vanish.
+        /// The entries the game server wrote are copied through verbatim - they never need to
+        /// be deserialized, only counted.
+        /// </para>
+        /// </summary>
+        private InterceptResult OnServerSpecificEntries(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
+        {
+            session.HasGameServerSettings = true;
+
+            ServerSpecificSettingBase[] extra = session.Server?.GetExtraServerSpecificEntries(session);
+
+            if (extra == null || extra.Length == 0)
+                return InterceptResult.Pass();
+
+            if (reader.Remaining < sizeof(int) + sizeof(byte))
+                return InterceptResult.Pass();
+
+            int version = reader.ReadInt();
+            int count = reader.ReadByte();
+
+            if (count + extra.Length > byte.MaxValue)
+            {
+                SiteLinkLogger.Warn($"{Connection?.Tag} Cannot append {extra.Length} server-specific entries: the game server already sent {count} and the wire format caps the total at {byte.MaxValue}.");
+                return InterceptResult.Pass();
+            }
+
+            ArraySegment<byte> gameServerEntries = reader.ReadBytesSegment(reader.Remaining);
+
+            NetworkWriter writer = new NetworkWriter();
+
+            writer.WriteUShort(NetworkMessages.SSSEntriesPack);
+            writer.WriteInt(version);
+            writer.WriteByte((byte)(count + extra.Length));
+
+            if (gameServerEntries.Count > 0)
+                writer.WriteBytes(gameServerEntries.Array, gameServerEntries.Offset, gameServerEntries.Count);
+
+            foreach (ServerSpecificSettingBase setting in extra)
+            {
+                writer.WriteByte(ServerSpecificSettingsSync.GetCodeFromType(setting.GetType()));
+                setting.SerializeEntry(writer);
+            }
+
+            return InterceptResult.Replace(writer.ToArraySegment());
         }
 
         private InterceptResult OnRestart(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)

@@ -19,7 +19,9 @@ public class RemoteServer : Server
                     new SSGroupHeader("Servers"),
                 };
 
-                int id = 0;
+                // Ids start at the proxy range so they never collide with whatever the game
+                // server or its plugins registered - the client keeps a single flat id space.
+                int id = ProxySettingIdBase;
                 foreach (string server in SiteLinkSettings.Singleton.ServersInSelector)
                 {
                     Server target = Get<Server>(name: server);
@@ -40,9 +42,22 @@ public class RemoteServer : Server
 
     public RemoteServer(string name) : base(name) { }
 
+    /// <summary>
+    /// Appended to the entries pack the game server sends. Rewriting the game server's own
+    /// pack is the only way both sets survive: the client stores one collection per server,
+    /// so sending a competing pack would simply overwrite whichever arrived first.
+    /// </summary>
+    public override ServerSpecificSettingBase[] GetExtraServerSpecificEntries(Session session) => ServerSettings;
+
     public override void OnSessionSpawned(Session session)
     {
-        //session.Connection?.AsServer.ServerSpecificEntries(ServerSettings);
+        // Vanilla servers and servers without a single server-specific setting never send an
+        // entries pack, so there is nothing to append to and the selector has to be sent on
+        // its own.
+        if (session.HasGameServerSettings)
+            return;
+
+        session.Connection?.AsServer.ServerSpecificEntries(ServerSettings);
     }
 
     public override void OnSessionSSSReponse(Session session, int id)

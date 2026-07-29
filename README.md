@@ -191,7 +191,7 @@ one proxy in front of the same game server that guess is wrong.
 
 ## Why you want it
 
-Rule 5.6 of the CSGD requires the data reported to the central servers — including the
+Rule 5.6 of the CSG requires the data reported to the central servers — including the
 player count — to be accurate. A proxy only knows about the sessions it is holding itself.
 Run two proxies and each one reports its own slice, so neither number matches reality.
 The bridge makes the game server report its own count, and the proxy uses that instead.
@@ -213,31 +213,55 @@ Dummies and the host are never counted.
 `LabAPI/configs/<port>/SiteLink.Bridge/config.yml`:
 
 ```yml
-# Address of the SiteLink proxy this game server should connect to.
-ip: 127.0.0.1
+# Proxies this game server reports to. Add one entry per proxy - the bridge keeps a
+# connection to each of them and reports the same numbers to all of them.
+proxies:
+- ip: 127.0.0.1
+  port: 7900
+  secret_key: '---'
 
-# Port of the SiteLink proxy this game server should connect to.
-port: 7777
+# Print connection state changes, player count reports and round state changes to the
+# server console.
+debug: false
 
-# Must match 'secret_key' under the server's bridge settings in the proxy config.
-secret_key: '---'
-
-# Print connection state changes and player count reports to the server console.
-debug: true
-
-# How often, in seconds, the current player count is reported to the proxy.
+# How often, in seconds, the current player count is reported to the proxies.
 player_count_report_interval: 5
 
-# Report the player count to the proxy.
+# Report the player count to the proxies.
 report_player_count: true
+
+# Report round state changes (round start/end, restart, soft restart, idle mode).
+report_round_state: true
+```
+
+`port` is the proxy's **bridge** port (`bridge.listen_port` in the proxy config), not a
+game client listener port. Every game server behind the same proxy connects to that one
+port; the proxy tells them apart by `secret_key`.
+
+Two proxies in front of the same game server:
+
+```yml
+proxies:
+- ip: 10.0.0.1
+  port: 7900
+  secret_key: 'first-proxy-secret'
+- ip: 10.0.0.2
+  port: 7900
+  secret_key: 'second-proxy-secret'
 ```
 
 ## Proxy configuration
 
-Enable the bridge on the matching server entry and use the same secret, then point the
-listener's player count at that server:
+Open the bridge endpoint once, then enable the bridge on each server entry with its own
+secret and point the listener's player count at that server:
 
 ```yml
+# One endpoint for every bridge, no matter how many game servers you run.
+bridge:
+  enabled: true
+  listen_address: 0.0.0.0
+  listen_port: 7900
+
 servers:
 -
   name: default
@@ -255,28 +279,51 @@ listeners:
     take_player_count_from_server: default
 ```
 
+The `secret_key` is what identifies the game server, so give every server its own. Changing
+the `bridge` block requires a proxy restart; `reload` does not pick it up.
+
 When the bridge is connected, the proxy reports the game server's count. If the bridge goes
 away, the proxy warns once and falls back to its own session count after 30 seconds.
+
+## Round state
+
+The bridge tells the proxy what the round is doing instead of letting it infer state from
+player traffic: waiting for players, in progress, ended, restarting (full, fast or
+redirect) and idle mode. Round restarts triggered by `sr` (soft restart) and fast restart
+are reported the same way. On the proxy side this is available as `Server.BridgeRoundState`,
+`Server.BridgeRestartType`, `Server.BridgeIdleMode` and `Server.IsBridgeRestarting`, plus
+the `Server.OnBridgeRoundStateChanged` override.
 
 ## Commands
 
 | Command | Where | Description |
 |---|---|---|
-| `.gsh` | game server | Lists the target servers advertised by the proxy (the ones in `servers_in_selector`). |
-| `.slbridge` | game server | Connection state, proxy endpoint, last reported count, raw/dummy counts and target servers. |
+| `.gsh` | game server | Lists the target servers advertised by the proxies (the ones in `servers_in_selector`). |
+| `.slbridge` | game server | Per-proxy connection state, last reported count, raw/dummy counts, round state and target servers. |
 
 ## Writing your own plugin against the bridge
 
 `SiteLink.API.dll` is usable on its own if you would rather write your own plugin:
 
 ```csharp
-SiteLinkBridge.Initialize("127.0.0.1", 7777, "---");
+// Single proxy.
+SiteLinkBridge.Initialize("127.0.0.1", 7900, "---");
 
-SiteLinkBridge.RegisterConnectedHandler(() => Logger.Info("Connected"));
-SiteLinkBridge.RegisterDisconnectedHandler(info => Logger.Warn($"Lost: {info.Reason}"));
+// Or several.
+SiteLinkBridge.Initialize(new[]
+{
+    new BridgeEndpoint("10.0.0.1", 7900, "first-proxy-secret"),
+    new BridgeEndpoint("10.0.0.2", 7900, "second-proxy-secret"),
+});
 
-// Game server -> proxy
+SiteLinkBridge.RegisterConnectedHandler(endpoint => Logger.Info($"Connected to {endpoint}"));
+SiteLinkBridge.RegisterDisconnectedHandler((endpoint, info) => Logger.Warn($"Lost {endpoint}: {info.Reason}"));
+
+// Game server -> every connected proxy, returns how many it reached.
 SiteLinkBridge.Send(1001, writer => writer.Put("hello"));
+
+// Game server -> one proxy.
+SiteLinkBridge.SendTo(endpoint, 1001, writer => writer.Put("hello"));
 
 // Proxy -> game server (on the proxy side)
 SiteLinkBridge.SendTo(server, 1001, writer => writer.Put("hello"));
@@ -285,7 +332,8 @@ SiteLinkBridge.SendTo(server, 1001, writer => writer.Put("hello"));
 SiteLinkBridge.RegisterHandler(1001, reader => { /* ... */ });
 ```
 
-Message ids `17150` (target server list) and `17151` (player count) are reserved by
-SiteLink itself.
+Message ids `17150` (target server list), `17151` (player count) and `17152` (round state)
+are reserved by SiteLink itself.
+
 
 > 🧱 *SiteLink — bridging SCP:SL servers into one connected network.*

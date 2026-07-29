@@ -251,7 +251,7 @@ public class ScpServerListHandler : IDisposable
                 }
                 else
                 {
-                    // Rule 5.6 of the CSGD requires the reported player count to be accurate.
+                    // Rule 5.6 of the CSG requires the reported player count to be accurate.
                     // The proxy's own session count is not: with more than one proxy in front
                     // of the same game server each proxy only sees its own slice. When the
                     // bridge plugin is reporting, its number is the only correct one.

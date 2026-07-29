@@ -18,7 +18,7 @@ Two consequences:
 2. Player counts reported to the SCP:SL central servers come from
    `Server.SessionsCount` — the number of sessions *this proxy* is holding. With two proxies
    in front of one game server, each reports its own slice, so neither number is correct.
-   CSGD 5.6 requires accurate data. Northwood's guidance is to report the game server's
+   CSG 5.6 requires accurate data. Northwood's guidance is to report the game server's
    count, not the proxy's.
 
 ## Scope
