@@ -98,23 +98,21 @@ jobs:
         run: |
           dotnet publish "${{ env.PROJECT_PATH }}" \
             --configuration Release \
-            --runtime "${{ env.WINDOWS_RUNTIME }}" \
+            --runtime win-x64 \
             --self-contained true \
-            --no-restore \
             --output "${{ env.WINDOWS_OUTPUT }}" \
             -p:Version="${{ steps.version.outputs.version }}" \
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:DebugType=None \
             -p:DebugSymbols=false
-
+      
       - name: Publish Linux x64
         run: |
           dotnet publish "${{ env.PROJECT_PATH }}" \
             --configuration Release \
-            --runtime "${{ env.LINUX_RUNTIME }}" \
+            --runtime linux-x64 \
             --self-contained true \
-            --no-restore \
             --output "${{ env.LINUX_OUTPUT }}" \
             -p:Version="${{ steps.version.outputs.version }}" \
             -p:PublishSingleFile=true \
