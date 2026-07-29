@@ -208,6 +208,21 @@ namespace SiteLink.API.Networking
 
         public DateTime AliveUntil { get; set; } = DateTime.MinValue;
 
+        /// <summary>
+        /// Latest moment a client that left because of a game server restart may still claim
+        /// this session back. <see cref="DateTime.MinValue"/> means the default detach grace
+        /// applies.
+        /// <para>
+        /// A restart hands the client back to its own reconnect countdown, which is up to
+        /// <c>full_restart_rejoin_time</c> (25 seconds by default) - far longer than the ten
+        /// seconds a detached session normally survives. Without this the session expired
+        /// while the player was still staring at the vanilla restart screen, and they came
+        /// back as a brand new connection that got routed by priority instead of back to the
+        /// server they were playing on.
+        /// </para>
+        /// </summary>
+        public DateTime ReconnectDeadline { get; internal set; } = DateTime.MinValue;
+
         public DateTime? DetachedAtUtc { get; set; }
 
         public bool WasDetached { get; set; }
@@ -257,6 +272,32 @@ namespace SiteLink.API.Networking
         private const float RecoveryHintDuration = 2.5f;
 
         private DateTime _nextRecoveryHint = DateTime.MaxValue;
+
+        /// <summary>
+        /// Slack added on top of the restart offset before a detached session gives up on the
+        /// client coming back.
+        /// <para>
+        /// The client waits the offset, then loads a scene, then re-authenticates against the
+        /// central servers - none of which is instant, and none of which the proxy can see.
+        /// Expiring a heartbeat early costs the player their slot for no reason, so the window
+        /// is generous; a client that really left still frees the session when the grace runs
+        /// out.
+        /// </para>
+        /// </summary>
+        private const double RestartReconnectGraceSeconds = 25.0;
+
+        /// <summary>
+        /// When the proxy drops the client itself to finish the restart it just announced.
+        /// <see cref="DateTime.MaxValue"/> while no restart is pending.
+        /// </summary>
+        private DateTime _restartDropClientAt = DateTime.MaxValue;
+
+        /// <summary>
+        /// How long the restart message gets to reach the client before its socket is closed.
+        /// Long enough for the batch it rides in to be flushed, short enough that the player
+        /// does not stare at a frozen facility first.
+        /// </summary>
+        private const double RestartClientDropDelaySeconds = 1.0;
 
         /// <summary>
         /// Set once the bridge has told us the game server came back and is accepting
@@ -404,12 +445,12 @@ namespace SiteLink.API.Networking
 
             switch (type)
             {
-                // A fast restart is still the game server tearing the round down and dropping
-                // its transport. Passing it through makes the client disconnect from the proxy
-                // and re-authenticate, and the proxy then reads the game server's own
-                // disconnect as a shutdown and starts the slow shutdown recovery. Handling it
-                // exactly like a full restart keeps the client attached and lets the recovery
-                // loop - which the bridge now drives - put it back on the server.
+                // A fast restart tells the client to come back immediately and gives it no
+                // countdown to display, which on a proxy reads as the screen simply blinking:
+                // the facility reloads and the player never learns the round restarted. The
+                // client is told about a full restart instead, so it gets the same waiting
+                // screen every other restart produces, and the proxy holds its session for
+                // the trip.
                 case RoundRestartType.FastRestart:
                     SiteLinkLogger.Info($"{Connection?.Tag} Server is performing a fast restart.");
 
@@ -418,8 +459,12 @@ namespace SiteLink.API.Networking
                     // A fast restart announces no delay of its own; without a bridge to tell
                     // us when it finished, the transport's own connection delay is the best
                     // estimate we have.
-                    session.BeginRestartRecovery(3f, extendedReconnectionPeriod: true);
-                    return InterceptResult.Drop();
+                    float fastRestartDelay = Math.Max(3f, session.Server?.BridgeConnectionDelaySeconds ?? 0);
+
+                    session.BeginRestartRecovery(fastRestartDelay, extendedReconnectionPeriod: true);
+                    return InterceptResult.Replace(
+                        MirrorMessagesEx.BuildFullRestart(fastRestartDelay, extendedReconnectionPeriod: true)
+                    );
 
                 case RoundRestartType.RedirectRestart:
                     return InterceptResult.Pass();
@@ -435,8 +480,13 @@ namespace SiteLink.API.Networking
                     SiteLinkLogger.Info($"{Connection?.Tag} Server closed the connection, likely due to restart.");
 
                     IsRestarting = true;
+
+                    // Forwarded untouched. The offset the game server picked is its own
+                    // estimate of when it will be back - a measured average for `rr`,
+                    // full_restart_rejoin_time for `sr` - and the client's restart screen and
+                    // countdown are driven entirely by it.
                     session.BeginRestartRecovery(restartDelay, extendedReconnectionPeriod);
-                    return InterceptResult.Drop();
+                    return InterceptResult.Pass();
 
                 default:
                     return InterceptResult.Pass();
@@ -511,6 +561,9 @@ namespace SiteLink.API.Networking
         {
             Connection = connection;
             IsDetached = false;
+
+            // The client is back; whatever extra grace a restart bought it has been spent.
+            ReconnectDeadline = DateTime.MinValue;
         }
 
         /// <summary>
@@ -611,6 +664,7 @@ namespace SiteLink.API.Networking
             _netManager?.PollEvents();
             AsClient?.Update();
 
+            UpdateRestartClientDrop();
             UpdateShutdownRetry();
             UpdateRecoveryHint();
 
@@ -850,6 +904,16 @@ namespace SiteLink.API.Networking
 
             ShowShutdownRetryStatus();
 
+            // The restart message is on its way to the client, and the client answers it by
+            // leaving. Without this the proxy reads that as "player quit" and tears the whole
+            // slot down, so the player comes back as a stranger and gets routed by priority
+            // instead of back to the server they were playing on.
+            Connection.IsSwitchingServers = true;
+            ReconnectDeadline = DateTime.UtcNow.AddSeconds(
+                Math.Max(0f, restartDelay) + RestartReconnectGraceSeconds
+            );
+            _restartDropClientAt = DateTime.UtcNow.AddSeconds(RestartClientDropDelaySeconds);
+
             SiteLinkLogger.Info(
                 $"{Connection.Tag} Server (f=yellow){restartingServer.Name}(f=white) is restarting; " +
                 $"first reconnect in (f=yellow){_recoveryInitialDelay:0.##}(f=white) second(s), then " +
@@ -981,9 +1045,51 @@ namespace SiteLink.API.Networking
             ShowShutdownRetryStatus();
         }
 
+        /// <summary>
+        /// Closes the client's connection shortly after a restart was announced to it.
+        /// <para>
+        /// On a vanilla server the restart message and the transport shutdown arrive together,
+        /// and it is the shutdown that actually sends the client to its reconnect screen -
+        /// the message on its own only tells it how long to wait. Behind a proxy nothing ever
+        /// closes that socket, so the client kept the connection, ignored its own countdown,
+        /// and sat on a facility that was no longer being simulated. Dropping it here is the
+        /// proxy standing in for the game server's socket, which is what makes the restart
+        /// look like a restart.
+        /// </para>
+        /// </summary>
+        private void UpdateRestartClientDrop()
+        {
+            if (_restartDropClientAt > DateTime.UtcNow)
+                return;
+
+            _restartDropClientAt = DateTime.MaxValue;
+
+            RemoteConnection connection = Connection;
+
+            if (connection == null)
+                return;
+
+            // If recovery already handed the client to a newer session, the player is back in
+            // the facility and dropping them now would be a kick with extra steps.
+            if (!ReferenceEquals(connection.Session, this))
+                return;
+
+            // Transport-level only. A disconnect reason would be rendered as an error over
+            // the restart screen the client is about to show, and the client is expected
+            // back: IsSwitchingServers keeps the session alive for it.
+            connection.Disconnect();
+        }
+
         private void UpdateShutdownRetry()
         {
             if (_shutdownRetryServer == null || _shutdownRetryFinished || Status != SessionStatus.Connected)
+                return;
+
+            // No client to reconnect on behalf of. This is the normal state for most of a
+            // restart: the player is away watching the game's own restart screen, and the
+            // preauth the retry needs went with them. Hold the recovery until they are back
+            // rather than burning attempts - or dereferencing a connection that is gone.
+            if (Connection == null)
                 return;
 
             // The bridge is the only source that knows whether the game server is actually

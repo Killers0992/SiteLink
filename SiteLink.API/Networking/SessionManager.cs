@@ -322,6 +322,15 @@ namespace SiteLink.API.Networking
                     s.AttachToConnection(connection);
                     connection.AcceptRequest();
                     connection.Session = s;
+
+                    // Mid-restart the proxy has no game server behind this session yet, so
+                    // there is no facility to hand over. The client is sitting on its own
+                    // loading screen after reconnecting; leaving it there until the recovery
+                    // lands - and letting the game server send its own scene message then -
+                    // beats loading the map twice.
+                    if (s.IsRestarting)
+                        return true;
+
                     connection.AsServer.Scene("Facility");
 
                     if (!s.Server.IsSimulated)
@@ -345,7 +354,16 @@ namespace SiteLink.API.Networking
                     return;
 
                 slot.Active.DetachFromConnection();
-                slot.Active.AliveUntil = DateTime.UtcNow.AddSeconds(DefaultSessionExpirationSeconds);
+
+                // A client sent away by a game server restart is on its own countdown, which
+                // can be far longer than the default grace. The session has to outlive that
+                // countdown or the player loses their place while the vanilla restart screen
+                // is still counting down for them.
+                DateTime grace = DateTime.UtcNow.AddSeconds(DefaultSessionExpirationSeconds);
+
+                slot.Active.AliveUntil = slot.Active.ReconnectDeadline > grace
+                    ? slot.Active.ReconnectDeadline
+                    : grace;
             }
 
             //SiteLinkLogger.Info($"Session detached for {userId} {reason}, expires in {DefaultSessionExpirationSeconds}s...");

@@ -70,6 +70,32 @@ namespace SiteLink.API.Misc
             });
         }
 
+        /// <summary>
+        /// Serializes a full round restart message, ready to be handed to the client in place
+        /// of whatever the game server sent.
+        /// <para>
+        /// A fast restart carries no countdown of its own, so forwarding it verbatim through a
+        /// proxy leaves the player with no restart screen at all. Rewriting it as a full
+        /// restart with an offset gives them the same screen every other restart produces.
+        /// </para>
+        /// </summary>
+        /// <param name="offset">Seconds the client waits before reconnecting.</param>
+        /// <param name="extendedReconnectionPeriod">Whether the client may keep retrying past its usual window.</param>
+        public static ArraySegment<byte> BuildFullRestart(float offset, bool extendedReconnectionPeriod)
+        {
+            NetworkWriter writer = new NetworkWriter();
+
+            writer.WriteUShort(NetworkMessages.RoundRestartMessage);
+
+            // RoundRestartType.FullRestart
+            writer.WriteByte(0);
+            writer.WriteBool(true);
+            writer.WriteBool(extendedReconnectionPeriod);
+            writer.WriteFloat(offset);
+
+            return writer.ToArraySegment();
+        }
+
         public static void Hint(this MirrorSender sender, string message, float duration = 3)
         {
             // The client only renders hints once it owns a player object. A session that was
