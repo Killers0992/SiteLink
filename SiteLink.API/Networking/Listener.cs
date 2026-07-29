@@ -592,6 +592,14 @@ public class Listener : IDisposable
 
             case ClientType.GameClient:
 
+                // Before anything else: the player may be coming back from a restart that has
+                // not finished yet. They are sent away with a countdown instead of being let in,
+                // and this has to happen before a RemoteConnection exists - constructing one
+                // claims their user id, which would make their own next attempt look like a
+                // duplicate connection.
+                if (SessionManager.Singleton.TryDelayRestartingClient(request, preAuth, RequestWriter))
+                    return;
+
                 if (RemoteConnection.ConnectionByUserId.ContainsKey(preAuth.UserId))
                 {
                     SiteLinkLogger.Info($"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");

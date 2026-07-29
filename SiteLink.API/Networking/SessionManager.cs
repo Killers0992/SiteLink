@@ -9,6 +9,15 @@ namespace SiteLink.API.Networking
         public static SessionManager Singleton { get; private set; }
 
         private const double DefaultSessionExpirationSeconds = 10.0;
+
+        /// <summary>
+        /// How long a session survives each time its player knocks during a restart and is sent
+        /// away again. The client retries every few seconds, so this only has to outlive a
+        /// couple of missed attempts - long enough that a slow game server does not cost the
+        /// player their seat, short enough that a player who gave up does not hold one.
+        /// </summary>
+        private const double RestartingClientKeepAliveSeconds = 20.0;
+
         private readonly Lazy<DisconnectServer> _disconnectServer = new(() => new DisconnectServer());
 
         public ConcurrentDictionary<string, SessionSlot> Slots { get; } = new();
@@ -304,6 +313,50 @@ namespace SiteLink.API.Networking
             RemoveSlotIfEmpty(userId, slot);
         }
 
+        /// <summary>
+        /// Sends a returning client away again while the game server behind its session is
+        /// still restarting, the same way the game server itself delays connections while it
+        /// boots: rejection reason 17 plus the number of seconds to wait.
+        /// <para>
+        /// This is what keeps the player from being lost. Accepting them into a session with no
+        /// game server behind it leaves them on a loading screen that never finishes until the
+        /// client gives up; sending them away keeps them in their own reconnect loop, which is
+        /// the mechanism the game already has for exactly this situation.
+        /// </para>
+        /// </summary>
+        /// <returns>Whether the request was rejected and must not be processed any further.</returns>
+        public bool TryDelayRestartingClient(ConnectionRequest request, PreAuth preAuth, NetDataWriter writer)
+        {
+            if (preAuth.UserId == null || !Slots.TryGetValue(preAuth.UserId, out SessionSlot slot))
+                return false;
+
+            byte delay;
+
+            lock (slot)
+            {
+                Session session = slot.Active;
+
+                if (session == null || !session.IsAwaitingRestartRecovery)
+                    return false;
+
+                // The client is provably still waiting, so the session has to outlive this
+                // attempt - and the preauth it presented is fresher than the one the session
+                // was created with, which matters because a preauth expires.
+                session.NoteClientStillWaiting(preAuth, RestartingClientKeepAliveSeconds);
+
+                delay = session.GetConnectionDelaySeconds();
+            }
+
+            SiteLinkLogger.Debug(
+                $"Delaying (f=yellow){preAuth.UserId}(f=white) by (f=yellow){delay}(f=white) second(s), " +
+                $"their server is still restarting.",
+                "Session"
+            );
+
+            request.RejectWithDelay(writer, delay);
+            return true;
+        }
+
         public bool TryReattachConnection(RemoteConnection connection)
         {
             string userId = connection.PreAuth.UserId;
@@ -320,14 +373,13 @@ namespace SiteLink.API.Networking
                         return false;
 
                     s.AttachToConnection(connection);
-                    connection.AcceptRequest();
                     connection.Session = s;
+                    connection.AcceptRequest();
 
-                    // Mid-restart the proxy has no game server behind this session yet, so
-                    // there is no facility to hand over. The client is sitting on its own
-                    // loading screen after reconnecting; leaving it there until the recovery
-                    // lands - and letting the game server send its own scene message then -
-                    // beats loading the map twice.
+                    // Normally unreachable: a client whose session is mid-restart is delayed at
+                    // the listener before it ever gets here. If it does slip through, there is
+                    // no facility to hand over yet - the session sends the handover itself as
+                    // soon as its reconnect lands.
                     if (s.IsRestarting)
                         return true;
 
