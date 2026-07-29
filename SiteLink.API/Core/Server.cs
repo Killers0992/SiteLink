@@ -73,6 +73,52 @@ public class Server
 
     public BridgeConnection BridgeConnection { get; set; }
 
+    /// <summary>
+    /// How long a bridge-reported player count stays authoritative after the last update.
+    /// Deliberately much larger than the plugin's report interval so a single dropped UDP
+    /// packet does not flip the reported source of truth.
+    /// </summary>
+    public static readonly TimeSpan BridgePlayerCountTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The player count last reported by the bridge plugin running on this game server, or
+    /// <c>-1</c> when the bridge has never reported one.
+    /// </summary>
+    public int BridgePlayerCount { get; private set; } = -1;
+
+    /// <summary>
+    /// The slot count last reported by the bridge plugin, or <c>-1</c> when unknown.
+    /// </summary>
+    public int BridgeMaxPlayers { get; private set; } = -1;
+
+    /// <summary>
+    /// UTC timestamp of the last player count reported by the bridge plugin.
+    /// </summary>
+    public DateTime BridgePlayerCountUpdatedAt { get; private set; } = DateTime.MinValue;
+
+    /// <summary>
+    /// Whether the bridge is attached and its last reported player count is recent enough
+    /// to be reported to the central servers.
+    /// </summary>
+    public bool HasFreshBridgePlayerCount =>
+        BridgeConnection != null
+        && BridgePlayerCount >= 0
+        && DateTime.UtcNow - BridgePlayerCountUpdatedAt < BridgePlayerCountTimeout;
+
+    internal void SetBridgePlayerCount(int players, int maxPlayers)
+    {
+        BridgePlayerCount = players;
+        BridgeMaxPlayers = maxPlayers;
+        BridgePlayerCountUpdatedAt = DateTime.UtcNow;
+    }
+
+    internal void ResetBridgePlayerCount()
+    {
+        BridgePlayerCount = -1;
+        BridgeMaxPlayers = -1;
+        BridgePlayerCountUpdatedAt = DateTime.MinValue;
+    }
+
     public int SessionsCount => _sessions.Count;
 
     public Session[] GetSessionsSnapshot() => _sessions.Keys.ToArray();

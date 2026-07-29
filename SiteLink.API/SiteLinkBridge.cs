@@ -26,6 +26,12 @@ public static class SiteLinkBridge
 
     public const ushort MsgTargetServersList = 17150;
 
+    /// <summary>
+    /// Sent by the game server to report how many real players it is currently hosting.
+    /// Payload: int playerCount, int maxPlayers.
+    /// </summary>
+    public const ushort MsgPlayerCount = 17151;
+
 #if NET48
     public static System.Collections.Generic.List<string> TargetServers { get; private set; } = new System.Collections.Generic.List<string>();
 #endif
@@ -174,6 +180,36 @@ public static class SiteLinkBridge
 #endif
 
 #if NET10_0
+    static SiteLinkBridge()
+    {
+        // Player count reporting is built into the API so that every proxy gets accurate
+        // numbers without requiring an extra plugin. CSGD 5.6 is not optional.
+        RegisterHandler(MsgPlayerCount, OnBridgePlayerCount);
+    }
+
+    private static void OnBridgePlayerCount(NetPacketReader reader, Server server)
+    {
+        if (server == null)
+            return;
+
+        if (reader.AvailableBytes < sizeof(int) * 2)
+        {
+            SiteLinkLogger.Warn($"{server.Tag} Bridge sent a malformed player count packet.");
+            return;
+        }
+
+        int players = reader.GetInt();
+        int maxPlayers = reader.GetInt();
+
+        if (players < 0 || maxPlayers < 0)
+        {
+            SiteLinkLogger.Warn($"{server.Tag} Bridge reported a negative player count ({players}/{maxPlayers}), ignoring.");
+            return;
+        }
+
+        server.SetBridgePlayerCount(players, maxPlayers);
+    }
+
     public static void AttachServerPeer(Server server, LiteNetPeer peer)
     {
         _serverPeers[server] = peer;
@@ -189,11 +225,39 @@ public static class SiteLinkBridge
         }
     }
 
+    /// <summary>
+    /// Returns the servers that should be exposed to the game server, in
+    /// <c>servers_in_selector</c> order. Falls back to every registered server when the
+    /// selector list is empty or unset.
+    /// </summary>
+    private static List<Server> GetSelectorServers()
+    {
+        string[] selector = SiteLinkSettings.Singleton?.ServersInSelector;
+
+        if (selector == null || selector.Length == 0)
+            return Server.List;
+
+        List<Server> result = new List<Server>(selector.Length);
+
+        foreach (string name in selector)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            Server match = Server.Get<Server>(name: name.Trim());
+
+            if (match != null && !result.Contains(match))
+                result.Add(match);
+        }
+
+        return result;
+    }
+
     public static void SendTargetServersList(Server server)
     {
         SendTo(server, MsgTargetServersList, writer =>
         {
-            var servers = Server.List;
+            var servers = GetSelectorServers();
             writer.Put(servers.Count);
             foreach (var s in servers)
             {
@@ -207,6 +271,8 @@ public static class SiteLinkBridge
     public static bool DetachServerPeer(Server server, DisconnectInfo info)
     {
         var removed = _serverPeers.TryRemove(server, out _);
+
+        server?.ResetBridgePlayerCount();
 
         // Fire disconnected event
         BridgeDisconnectedHandler[] copy;
