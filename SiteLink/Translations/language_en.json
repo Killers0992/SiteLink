@@ -1,5 +1,7 @@
 {
-  "General": { "Tag": "[SiteLink]" },
+  "General": {
+    "Tag": "[SiteLink]"
+  },
   "Connection": {
     "ServerNotFound": "{tag}\nServer {server_name} was not found.",
     "ServerRemoved": "{tag}\nServer {server} was removed from the configuration.",
@@ -14,9 +16,9 @@
     "SessionReplaced": "{tag}\nYour server session was replaced."
   },
   "Recovery": {
-    "ShutdownWaiting": "{tag}\nServer {server} shut down, waiting for it to be online...",
+    "ShutdownWaiting": "{tag}\n<b>Server {server} went offline.</b>\nReconnecting in {countdown}s... (attempt {attempt}/{attempts})",
     "ShutdownUnreachable": "{tag}\nServer {server} is not reachable!",
-    "RestartWaiting": "{tag}\nServer {server} is restarting, reconnecting in {restart_delay} seconds...",
+    "RestartWaiting": "{tag}\n<b>Server {server} is restarting.</b>\nDo not leave - you will be reconnected automatically.\nReconnecting in {countdown}s...",
     "RestartUnreachable": "{tag}\nServer {server} did not come back online!"
   },
   "Commands": {

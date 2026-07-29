@@ -28,6 +28,18 @@ public class RemoteConnection : Connection
     /// </summary>
     public bool IsSwitchingServers { get; set; }
 
+    /// <summary>
+    /// Whether this client has ever had a spawned player object on any session.
+    /// <para>
+    /// Hints are gated on this rather than on <see cref="Networking.Session.IsSpawned"/>
+    /// because recovery replaces the session: a player who was mid-round when the game
+    /// server restarted is attached to a brand new, never-spawned session while the proxy
+    /// waits, which is exactly when the "reconnecting..." hint has to be visible. The
+    /// client-side HUD outlives the session, so the connection is the right owner of the flag.
+    /// </para>
+    /// </summary>
+    public bool HasEverSpawned { get; internal set; }
+
     public RemoteConnection(Listener listener, ConnectionRequest request, PreAuth preAuth) : base(listener, request, preAuth)
     {
         AsServer = new MirrorSender(this,

@@ -72,7 +72,11 @@ namespace SiteLink.API.Misc
 
         public static void Hint(this MirrorSender sender, string message, float duration = 3)
         {
-            if (!sender.Connection.Session.IsSpawned)
+            // The client only renders hints once it owns a player object. A session that was
+            // replaced during recovery reports IsSpawned == false even though the client is
+            // still standing in the facility, so the connection-level flag is the one that
+            // reflects what the player can actually see.
+            if (!sender.Connection.HasEverSpawned && sender.Connection.Session?.IsSpawned != true)
                 return;
 
             sender.Send(w =>

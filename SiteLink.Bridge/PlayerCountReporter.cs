@@ -188,23 +188,43 @@ namespace SiteLink.Bridge
 
         private sealed class PlayerCountTicker : MonoBehaviour
         {
+            /// <summary>
+            /// Round state is polled far more often than the player count. Nothing raises an
+            /// event when the transport stops delaying connections, and every second spent
+            /// not noticing is a second the proxy keeps players staring at a frozen facility.
+            /// </summary>
+            private const double RoundStatePollSeconds = 1d;
+
             // Idle mode sets Time.timeScale to 0.01, and InvokeRepeating runs on scaled time,
             // so a 5 second interval turned into 500 real seconds the moment the server went
             // idle. The proxy then hit its 30 second bridge timeout and fell back to counting
             // its own sessions. A stopwatch is the only clock idle mode cannot slow down.
             private readonly Stopwatch _sinceLastTick = Stopwatch.StartNew();
+            private readonly Stopwatch _sinceLastRoundState = Stopwatch.StartNew();
 
             private void Update()
             {
+                if (_sinceLastRoundState.Elapsed.TotalSeconds >= RoundStatePollSeconds)
+                {
+                    _sinceLastRoundState.Restart();
+
+                    try
+                    {
+                        // Idle mode and the connection delay flag have no events to hook, so
+                        // they ride along on this timer.
+                        RoundStateReporter.Poll();
+                    }
+                    catch (Exception ex)
+                    {
+                        SiteLinkBridgePlugin.LogError($"Round state report failed: {ex}");
+                    }
+                }
+
                 if (_sinceLastTick.Elapsed.TotalSeconds < Interval)
                     return;
 
                 _sinceLastTick.Restart();
-                Tick();
-            }
 
-            private void Tick()
-            {
                 try
                 {
                     Report();
@@ -214,16 +234,6 @@ namespace SiteLink.Bridge
                     // A throwing report must not kill the ticker, otherwise the proxy
                     // silently falls back to its own inaccurate count forever.
                     SiteLinkBridgePlugin.LogError($"Player count report failed: {ex}");
-                }
-
-                try
-                {
-                    // Idle mode has no event to hook, so it rides along on this timer.
-                    RoundStateReporter.Poll();
-                }
-                catch (Exception ex)
-                {
-                    SiteLinkBridgePlugin.LogError($"Round state report failed: {ex}");
                 }
             }
         }

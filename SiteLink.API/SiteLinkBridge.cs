@@ -516,7 +516,19 @@ public static class SiteLinkBridge
         BridgeRestartType restartType = (BridgeRestartType)reader.GetByte();
         bool idle = reader.GetBool();
 
-        server.SetBridgeRoundState(state, restartType, idle);
+        // Older bridges stop here. Treat their silence as "accepting", which is what the
+        // proxy assumed before the field existed, so a stale plugin degrades to the old
+        // timer-driven behaviour instead of never reconnecting anyone.
+        bool acceptingConnections = true;
+        int connectionDelaySeconds = 0;
+
+        if (reader.AvailableBytes >= 2)
+        {
+            acceptingConnections = reader.GetBool();
+            connectionDelaySeconds = reader.GetByte();
+        }
+
+        server.SetBridgeRoundState(state, restartType, idle, acceptingConnections, connectionDelaySeconds);
     }
 
     public static void AttachServerPeer(Server server, LiteNetPeer peer)

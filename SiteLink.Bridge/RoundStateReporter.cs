@@ -38,6 +38,7 @@ namespace SiteLink.Bridge
         private static BridgeRoundState _lastState = BridgeRoundState.Unknown;
         private static BridgeRestartType _lastRestartType = BridgeRestartType.None;
         private static bool _lastIdle;
+        private static bool _lastAccepting;
         private static bool _sentOnce;
 
         /// <summary>The state sent to the proxy in the last report.</summary>
@@ -48,6 +49,9 @@ namespace SiteLink.Bridge
 
         /// <summary>Whether the last report said the server is idling.</summary>
         public static bool LastIdle => _lastIdle;
+
+        /// <summary>Whether the last report said the transport is accepting connections.</summary>
+        public static bool LastAcceptingConnections => _lastAccepting;
 
         public static void Start()
         {
@@ -183,7 +187,7 @@ namespace SiteLink.Bridge
 
             // A bridge that connects mid-round would otherwise leave the proxy on Unknown
             // until the next round event, which on a quiet server can be a long time.
-            SendTo(endpoint, GetState(), GetRestartType(), IsIdle());
+            SendTo(endpoint, GetState(), GetRestartType(), IsIdle(), IsAcceptingConnections(), GetConnectionDelay());
         }
 
         /// <summary>
@@ -210,11 +214,14 @@ namespace SiteLink.Bridge
             BridgeRoundState state = GetState();
             BridgeRestartType restartType = GetRestartType();
             bool idle = IsIdle();
+            bool accepting = IsAcceptingConnections();
+            byte delaySeconds = GetConnectionDelay();
 
             bool changed = !_sentOnce
                 || state != _lastState
                 || restartType != _lastRestartType
-                || idle != _lastIdle;
+                || idle != _lastIdle
+                || accepting != _lastAccepting;
 
             if (!changed)
                 return;
@@ -222,6 +229,7 @@ namespace SiteLink.Bridge
             _lastState = state;
             _lastRestartType = restartType;
             _lastIdle = idle;
+            _lastAccepting = accepting;
             _sentOnce = true;
 
             SiteLinkBridge.Send(SiteLinkBridge.MsgRoundState, writer =>
@@ -229,21 +237,25 @@ namespace SiteLink.Bridge
                 writer.Put((byte)state);
                 writer.Put((byte)restartType);
                 writer.Put(idle);
+                writer.Put(accepting);
+                writer.Put(delaySeconds);
             });
 
             BridgeConfig config = SiteLinkBridgePlugin.Instance?.Config;
 
             if (config != null && config.Debug)
-                SiteLinkBridgePlugin.Log($"Reported round state {state} (restart: {restartType}, idle: {idle}) to the proxy.");
+                SiteLinkBridgePlugin.Log($"Reported round state {state} (restart: {restartType}, idle: {idle}, accepting: {accepting}) to the proxy.");
         }
 
-        private static void SendTo(BridgeEndpoint endpoint, BridgeRoundState state, BridgeRestartType restartType, bool idle)
+        private static void SendTo(BridgeEndpoint endpoint, BridgeRoundState state, BridgeRestartType restartType, bool idle, bool accepting, byte delaySeconds)
         {
             SiteLinkBridge.SendTo(endpoint, SiteLinkBridge.MsgRoundState, writer =>
             {
                 writer.Put((byte)state);
                 writer.Put((byte)restartType);
                 writer.Put(idle);
+                writer.Put(accepting);
+                writer.Put(delaySeconds);
             });
         }
 
@@ -291,6 +303,47 @@ namespace SiteLink.Bridge
             catch (Exception)
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Whether the transport will let a player in right now.
+        /// <para>
+        /// The game server sets <c>DelayConnections</c> for the whole restart and clears it
+        /// only once it is ready, rejecting every preauth in between. The proxy used to guess
+        /// this with a fixed ten second wait; reporting the flag directly is the difference
+        /// between reconnecting when the server is up and reconnecting when a timer says so.
+        /// </para>
+        /// </summary>
+        private static bool IsAcceptingConnections()
+        {
+            try
+            {
+                if (_shuttingDown)
+                    return false;
+
+                return !CustomLiteNetLib4MirrorTransport.DelayConnections;
+            }
+            catch (Exception)
+            {
+                // Never claim the server is closed because a field moved; the proxy falls
+                // back to its own timers when we say "accepting" and it turns out not to be.
+                return true;
+            }
+        }
+
+        /// <summary>How long the game server delays incoming connections by, clamped to a byte.</summary>
+        private static byte GetConnectionDelay()
+        {
+            try
+            {
+                byte delay = CustomLiteNetLib4MirrorTransport.DelayTime;
+
+                return delay == 0 ? (byte)1 : delay;
+            }
+            catch (Exception)
+            {
+                return 3;
             }
         }
     }

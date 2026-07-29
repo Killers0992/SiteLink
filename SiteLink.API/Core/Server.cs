@@ -159,15 +159,50 @@ public class Server
     /// </summary>
     public bool IsBridgeRestarting => BridgeRoundState == BridgeRoundState.Restarting;
 
-    internal void SetBridgeRoundState(BridgeRoundState state, BridgeRestartType restartType, bool idle)
+    /// <summary>
+    /// Whether the game server's transport is currently accepting player connections, as
+    /// reported by the bridge. Mirrors <c>CustomLiteNetLib4MirrorTransport.DelayConnections</c>
+    /// inverted: while the game server delays connections every join attempt is rejected,
+    /// so this is the only honest answer to "is it up yet".
+    /// </summary>
+    public bool BridgeAcceptingConnections { get; private set; }
+
+    /// <summary>
+    /// How many seconds the game server said it delays incoming connections by. Only
+    /// meaningful while <see cref="BridgeAcceptingConnections"/> is false.
+    /// </summary>
+    public int BridgeConnectionDelaySeconds { get; private set; }
+
+    /// <summary>
+    /// Whether the last round state reported by the bridge is recent enough to act on.
+    /// A bridge that died with the game server stops refreshing this, which is itself the
+    /// signal that the server is gone.
+    /// </summary>
+    public bool HasFreshBridgeRoundState =>
+        BridgeConnection != null
+        && BridgeRoundState != BridgeRoundState.Unknown
+        && DateTime.UtcNow - BridgeRoundStateUpdatedAt < BridgePlayerCountTimeout;
+
+    /// <summary>
+    /// Whether the bridge says the game server is deliberately unavailable - restarting or
+    /// shutting down - as opposed to merely unreachable.
+    /// </summary>
+    public bool IsBridgeBusyRestarting =>
+        BridgeRoundState == BridgeRoundState.Restarting
+        || BridgeRoundState == BridgeRoundState.Shutdown;
+
+    internal void SetBridgeRoundState(BridgeRoundState state, BridgeRestartType restartType, bool idle, bool acceptingConnections, int connectionDelaySeconds)
     {
         bool changed = BridgeRoundState != state
             || BridgeRestartType != restartType
-            || BridgeIdleMode != idle;
+            || BridgeIdleMode != idle
+            || BridgeAcceptingConnections != acceptingConnections;
 
         BridgeRoundState = state;
         BridgeRestartType = restartType;
         BridgeIdleMode = idle;
+        BridgeAcceptingConnections = acceptingConnections;
+        BridgeConnectionDelaySeconds = connectionDelaySeconds;
         BridgeRoundStateUpdatedAt = DateTime.UtcNow;
 
         if (changed)
@@ -179,6 +214,8 @@ public class Server
         BridgeRoundState = BridgeRoundState.Unknown;
         BridgeRestartType = BridgeRestartType.None;
         BridgeIdleMode = false;
+        BridgeAcceptingConnections = false;
+        BridgeConnectionDelaySeconds = 0;
         BridgeRoundStateUpdatedAt = DateTime.MinValue;
     }
 

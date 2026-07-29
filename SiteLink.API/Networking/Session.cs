@@ -77,6 +77,9 @@ namespace SiteLink.API.Networking
                     Server?.OnSessionSpawned(this);
 
                 _isSpawned = value;
+
+                if (value && Connection != null)
+                    Connection.HasEverSpawned = true;
             }
         }
 
@@ -239,6 +242,28 @@ namespace SiteLink.API.Networking
         private bool _shutdownRetryFinished;
         private float _recoveryInitialDelay;
 
+        /// <summary>
+        /// How often the recovery hint is re-sent while the game server is away.
+        /// <para>
+        /// Hints replace each other on the client and then fade, so a single hint sent once
+        /// per reconnect attempt left the screen blank for most of the outage - which is
+        /// what made players think the server had frozen and quit. Refreshing faster than
+        /// the hint's own lifetime keeps one continuous message on screen.
+        /// </para>
+        /// </summary>
+        private static readonly TimeSpan RecoveryHintInterval = TimeSpan.FromSeconds(1);
+
+        /// <summary>Hint lifetime, deliberately longer than the refresh interval so it never blinks.</summary>
+        private const float RecoveryHintDuration = 2.5f;
+
+        private DateTime _nextRecoveryHint = DateTime.MaxValue;
+
+        /// <summary>
+        /// Set once the bridge has told us the game server came back and is accepting
+        /// connections, so the countdown can stop lying about waiting.
+        /// </summary>
+        private bool _recoveryServerBack;
+
         public uint NetworkId { get; private set; }
         public string Nickname { get; set; }
         public string UserId { get; private set; }
@@ -372,8 +397,22 @@ namespace SiteLink.API.Networking
 
             switch (type)
             {
+                // A fast restart is still the game server tearing the round down and dropping
+                // its transport. Passing it through makes the client disconnect from the proxy
+                // and re-authenticate, and the proxy then reads the game server's own
+                // disconnect as a shutdown and starts the slow shutdown recovery. Handling it
+                // exactly like a full restart keeps the client attached and lets the recovery
+                // loop - which the bridge now drives - put it back on the server.
                 case RoundRestartType.FastRestart:
-                    return InterceptResult.Pass();
+                    SiteLinkLogger.Info($"{Connection?.Tag} Server is performing a fast restart.");
+
+                    IsRestarting = true;
+
+                    // A fast restart announces no delay of its own; without a bridge to tell
+                    // us when it finished, the transport's own connection delay is the best
+                    // estimate we have.
+                    session.BeginRestartRecovery(3f, extendedReconnectionPeriod: true);
+                    return InterceptResult.Drop();
 
                 case RoundRestartType.RedirectRestart:
                     return InterceptResult.Pass();
@@ -566,6 +605,7 @@ namespace SiteLink.API.Networking
             AsClient?.Update();
 
             UpdateShutdownRetry();
+            UpdateRecoveryHint();
 
             if (ConnectingToServer == null && ConnectToServers != null && ConnectToServers.Count > 0)
             {
@@ -744,7 +784,16 @@ namespace SiteLink.API.Networking
             _shutdownRetryAttemptsMade = 0;
             _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.RestartRetryInterval ?? 3f));
 
-            _recoveryInitialDelay = 10f;
+            // With a bridge attached we do not have to guess how long the restart takes: the
+            // bridge holds the retry back until the game server reports it is accepting
+            // connections again, so the initial wait only exists to avoid a pointless first
+            // attempt. Without one, fall back to the delay the game server announced, and to
+            // the old fixed ten seconds when it announced nothing useful.
+            _recoveryInitialDelay = restartingServer.HasFreshBridgeRoundState
+                ? 1f
+                : (restartDelay > 0.5f ? Math.Min(restartDelay, 30f) : 10f);
+
+            _recoveryServerBack = false;
 
             _nextShutdownRetry = DateTime.UtcNow.AddSeconds(_recoveryInitialDelay);
             _shutdownWaitingMessage = TranslationManager.For(this).Recovery.RestartWaiting;
@@ -843,6 +892,7 @@ namespace SiteLink.API.Networking
             _shutdownUnreachableMessage = TranslationManager.For(this).Recovery.ShutdownUnreachable;
             _shutdownRetryFinished = false;
             _recoveryInitialDelay = (float)_shutdownRetryInterval.TotalSeconds;
+            _recoveryServerBack = false;
         }
 
         private void ShowShutdownRetryStatus()
@@ -850,16 +900,47 @@ namespace SiteLink.API.Networking
             if (_shutdownRetryServer == null || _shutdownRetryFinished)
                 return;
 
-            Connection?.AsServer.Hint(
-                FormatShutdownRetryMessage(_shutdownWaitingMessage),
-                Math.Max(3f, (float)_shutdownRetryInterval.TotalSeconds + 0.5f)
-            );
+            _nextRecoveryHint = DateTime.UtcNow.Add(RecoveryHintInterval);
+
+            string message = FormatShutdownRetryMessage(_shutdownWaitingMessage);
+
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            Connection?.AsServer.Hint(message, RecoveryHintDuration);
+        }
+
+        /// <summary>
+        /// Keeps the recovery message on screen for the whole outage.
+        /// <para>
+        /// Without this the player saw one hint, watched it fade, and then stared at a frozen
+        /// facility for the rest of the restart with no indication that anything was still
+        /// happening. Re-sending on a fixed cadence also means the countdown in the message
+        /// actually counts down.
+        /// </para>
+        /// </summary>
+        private void UpdateRecoveryHint()
+        {
+            if (_shutdownRetryServer == null || _shutdownRetryFinished)
+            {
+                _nextRecoveryHint = DateTime.MaxValue;
+                return;
+            }
+
+            if (_nextRecoveryHint > DateTime.UtcNow)
+                return;
+
+            ShowShutdownRetryStatus();
         }
 
         private void UpdateShutdownRetry()
         {
             if (_shutdownRetryServer == null || _shutdownRetryFinished || Status != SessionStatus.Connected)
                 return;
+
+            // The bridge is the only source that knows whether the game server is actually
+            // down or merely swapping scenes, so let it drive the schedule when it is there.
+            ApplyBridgeRecoverySignal();
 
             if (_nextShutdownRetry > DateTime.UtcNow)
                 return;
@@ -915,16 +996,83 @@ namespace SiteLink.API.Networking
         {
             message ??= string.Empty;
 
+            // Seconds left until the next reconnect attempt. This is what makes the message
+            // read as progress rather than as a stuck screen: a static "waiting..." is
+            // indistinguishable from a crash from the player's side.
+            double countdown = Math.Max(0d, (_nextShutdownRetry - DateTime.UtcNow).TotalSeconds);
+
             return TranslationManager.Format(
                     message,
                     TranslationContext.For(this, _shutdownRetryServer))
                 .Add("server", _shutdownRetryServer?.DisplayName)
                 .Add("server_name", _shutdownRetryServer?.Name)
                 .Add("attempts", _shutdownRetryAttempts)
+                .Add("attempt", Math.Min(_shutdownRetryAttemptsMade + 1, Math.Max(1, _shutdownRetryAttempts)))
                 .Add("interval", _shutdownRetryInterval.TotalSeconds, "0.##")
                 .Add("restart_delay", _recoveryInitialDelay, "0.##")
+                .Add("countdown", countdown, "0")
                 .Format();
         }
+
+        /// <summary>
+        /// Lets the bridge, rather than a fixed timer, decide when the game server is worth
+        /// reconnecting to.
+        /// <para>
+        /// Without a bridge the proxy can only guess: it waits ten seconds, then retries on a
+        /// fixed interval and burns its attempt budget against a server that is still loading
+        /// a scene. The bridge reports both the round state and whether the transport is
+        /// still delaying incoming connections, which is exactly the question the retry loop
+        /// is trying to answer.
+        /// </para>
+        /// </summary>
+        private void ApplyBridgeRecoverySignal()
+        {
+            Server server = _shutdownRetryServer;
+
+            if (server == null || !server.HasFreshBridgeRoundState)
+                return;
+
+            if (server.IsBridgeBusyRestarting)
+            {
+                _recoveryServerBack = false;
+
+                // Do not spend an attempt on a server that has told us it is not ready. Keep
+                // the next check just past the point where the bridge would have to have
+                // reported again for us to still trust it.
+                DateTime hold = DateTime.UtcNow.Add(_shutdownRetryInterval);
+
+                if (_nextShutdownRetry < hold)
+                    _nextShutdownRetry = hold;
+
+                return;
+            }
+
+            if (!server.BridgeAcceptingConnections)
+            {
+                _recoveryServerBack = false;
+
+                // The transport is up but still delaying preauth. Connecting now earns a
+                // rejection and a wasted attempt; wait out the delay the server declared.
+                DateTime hold = DateTime.UtcNow.AddSeconds(Math.Max(1, server.BridgeConnectionDelaySeconds));
+
+                if (_nextShutdownRetry < hold)
+                    _nextShutdownRetry = hold;
+
+                return;
+            }
+
+            if (_recoveryServerBack)
+                return;
+
+            // First tick where the bridge says the server is live and accepting. Stop waiting.
+            _recoveryServerBack = true;
+            _nextShutdownRetry = DateTime.UtcNow;
+
+            SiteLinkLogger.Info(
+                $"{Connection?.Tag} Bridge reports (f=yellow){server.Name}(f=white) is accepting connections again; reconnecting now."
+            );
+        }
+
 
         internal void ShowConnectionDelayedStatus(Server server, byte delay)
         {
