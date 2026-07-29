@@ -436,6 +436,7 @@ public class ScpServerListHandler : IDisposable
             baseData["info"] = (listener.Settings.ServerList.DisplayName.Replace('+', '-') + $"<color=#00000000><size=1>SiteLink v{SiteLinkAPI.ApiVersionText}</size></color>").Base64Encode();
             baseData["pastebin"] = listener.Settings.ServerList.Pastebin;
             baseData["modded"] = "True";
+            baseData["tModded"] = listener.Settings.ServerList.TransparentlyModded ? "True" : "False";
             baseData["emailSet"] = "True";
             baseData["enforceSameIp"] = "True";
         }
