@@ -47,13 +47,6 @@
 			<HintPath>$(SL_REFERENCES)\Assembly-CSharp.dll</HintPath>
 		</Reference>
 
-		<!-- The game's Unity corlib, not the .NET Framework one: LiteNetLib inside
-		     Assembly-CSharp exposes ReadOnlySpan<T> overloads that net48 reference
-		     assemblies do not define. -->
-		<Reference Include="mscorlib" Condition="'$(TargetFramework)' == 'net48'">
-			<HintPath>$(SL_REFERENCES)\mscorlib.dll</HintPath>
-		</Reference>
-
 		<Reference Include="CommandSystem.Core" Condition="'$(TargetFramework)' == 'net48'">
 			<HintPath>$(SL_REFERENCES)\CommandSystem.Core.dll</HintPath>
 		</Reference>
@@ -83,6 +76,26 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\SiteLink.Protocol\SiteLink.Protocol.csproj" Condition="'$(TargetFramework)' == 'net10.0'" />
 	</ItemGroup>
+
+	<!--
+		The net48 build has to compile against the game's Unity corlib, not the .NET
+		Framework one: LiteNetLib inside Assembly-CSharp exposes ReadOnlySpan<T>
+		overloads and the 4.8 reference assemblies do not define that type.
+
+		Microsoft.NETFramework.ReferenceAssemblies injects its own bare
+		"mscorlib" Reference item from its .targets, which wins the simple-name
+		dedupe against a HintPath of ours. Swapping it out here, after that import
+		but before resolution, is the only place the substitution sticks.
+	-->
+	<Target Name="UseGameCorlib" BeforeTargets="ResolveAssemblyReferences" Condition="'$(TargetFramework)' == 'net48'">
+		<Error Text="mscorlib.dll was not found in SL_REFERENCES ('$(SL_REFERENCES)')." Condition="!Exists('$(SL_REFERENCES)\mscorlib.dll')" />
+		<ItemGroup>
+			<Reference Remove="mscorlib" />
+			<Reference Include="$(SL_REFERENCES)\mscorlib.dll">
+				<Private>False</Private>
+			</Reference>
+		</ItemGroup>
+	</Target>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net48' AND '$(OS)' == 'Windows_NT'">
 		<Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="C:\Users\Kille\AppData\Roaming\SCP Secret Laboratory\LabAPI\dependencies\global" ContinueOnError="WarnAndContinue" />

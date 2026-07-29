@@ -32,14 +32,6 @@
 			<Private>False</Private>
 		</Reference>
 
-		<!-- Same reason as SiteLink.API: LiteNetLib's writer overloads inside
-		     Assembly-CSharp reference ReadOnlySpan<T>, which only the game's
-		     corlib defines. -->
-		<Reference Include="mscorlib">
-			<HintPath>$(SL_REFERENCES)\mscorlib.dll</HintPath>
-			<Private>False</Private>
-		</Reference>
-
 		<Reference Include="CommandSystem.Core">
 			<HintPath>$(SL_REFERENCES)\CommandSystem.Core.dll</HintPath>
 			<Private>False</Private>
@@ -61,5 +53,17 @@
 		     copied next to the plugin. -->
 		<ProjectReference Include="..\SiteLink.API\SiteLink.API.csproj" Private="false" ReferenceOutputAssembly="true" />
 	</ItemGroup>
+
+	<!-- See SiteLink.API.csproj: the reference assemblies package injects its own
+	     mscorlib item, and LiteNetLib's signatures need the game's corlib. -->
+	<Target Name="UseGameCorlib" BeforeTargets="ResolveAssemblyReferences">
+		<Error Text="mscorlib.dll was not found in SL_REFERENCES ('$(SL_REFERENCES)')." Condition="!Exists('$(SL_REFERENCES)\mscorlib.dll')" />
+		<ItemGroup>
+			<Reference Remove="mscorlib" />
+			<Reference Include="$(SL_REFERENCES)\mscorlib.dll">
+				<Private>False</Private>
+			</Reference>
+		</ItemGroup>
+	</Target>
 
 </Project>
