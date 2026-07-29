@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -20,12 +21,25 @@ public static class PackageManager
         CancellationToken cancellationToken = default)
     {
         (string owner, string name) = ParseRepository(repository);
-        string url = $"https://{owner.ToLowerInvariant()}.github.io/{name}/releases.json";
-        using HttpResponseMessage response = await Http.GetAsync(url, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        string json = await response.Content.ReadAsStringAsync();
-        return JsonConvert.DeserializeObject<PackageReleaseIndex>(json)
-            ?? throw new InvalidDataException($"Release index '{url}' was empty.");
+
+        try
+        {
+            string url = $"https://{owner.ToLowerInvariant()}.github.io/{name}/releases.json";
+            using HttpResponseMessage response = await Http.GetAsync(url, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                string json = await response.Content.ReadAsStringAsync();
+                PackageReleaseIndex index = JsonConvert.DeserializeObject<PackageReleaseIndex>(json);
+                if (index != null && index.Versions != null && index.Versions.Count > 0)
+                    return index;
+            }
+        }
+        catch
+        {
+            // Fall back to GitHub REST API if releases.json is missing or invalid
+        }
+
+        return await GetIndexFromGitHubApiAsync(owner, name, cancellationToken);
     }
 
     public static PackageManifest GetLatest(
@@ -173,6 +187,103 @@ public static class PackageManager
 
     private static Version ParseVersion(string value) =>
         Version.TryParse(value?.TrimStart('v', 'V'), out Version version) ? version : null;
+
+    private static async Task<PackageReleaseIndex> GetIndexFromGitHubApiAsync(
+        string owner,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        string url = $"https://api.github.com/repos/{owner}/{name}/releases";
+        using HttpResponseMessage response = await Http.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        string json = await response.Content.ReadAsStringAsync();
+        JArray releases = JArray.Parse(json);
+
+        PackageReleaseIndex index = new()
+        {
+            DisplayName = name,
+            OwnerName = owner,
+            RepositoryName = name
+        };
+
+        foreach (JObject release in releases.Children<JObject>())
+        {
+            if (release["draft"]?.Value<bool>() == true)
+                continue;
+
+            string tagName = release["tag_name"]?.ToString();
+            if (string.IsNullOrWhiteSpace(tagName))
+                continue;
+
+            string versionStr = tagName.TrimStart('v', 'V');
+            PackageManifest manifest = new()
+            {
+                DisplayName = name,
+                OwnerName = owner,
+                RepositoryName = name,
+                Version = versionStr,
+                PackageType = "core"
+            };
+
+            if (release["assets"] is JArray assets)
+            {
+                foreach (JObject asset in assets.Children<JObject>())
+                {
+                    string fileName = asset["name"]?.ToString();
+                    string downloadUrl = asset["browser_download_url"]?.ToString();
+                    long size = asset["size"]?.Value<long>() ?? 0;
+
+                    if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(downloadUrl))
+                        continue;
+
+                    string platform;
+                    if (fileName.Equals("SiteLink.exe", StringComparison.OrdinalIgnoreCase) ||
+                        fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+                        fileName.Contains("win", StringComparison.OrdinalIgnoreCase))
+                    {
+                        platform = "windows";
+                    }
+                    else if (fileName.Equals("SiteLink", StringComparison.OrdinalIgnoreCase) ||
+                             fileName.Contains("linux", StringComparison.OrdinalIgnoreCase))
+                    {
+                        platform = "linux";
+                    }
+                    else if (fileName.Contains("mac", StringComparison.OrdinalIgnoreCase) ||
+                             fileName.Contains("osx", StringComparison.OrdinalIgnoreCase))
+                    {
+                        platform = "macos";
+                    }
+                    else
+                    {
+                        platform = "any";
+                    }
+
+                    manifest.Platforms[platform] = new PackageAsset
+                    {
+                        Platform = platform,
+                        FileName = fileName,
+                        FileUrl = downloadUrl,
+                        Size = size
+                    };
+                }
+            }
+
+            if (index.DisplayName == name && release["name"] != null)
+            {
+                string relName = release["name"].ToString();
+                if (!string.IsNullOrWhiteSpace(relName))
+                    index.DisplayName = relName;
+            }
+
+            index.Versions[versionStr] = manifest;
+        }
+
+        if (index.Versions.Count == 0)
+            throw new InvalidOperationException($"No valid releases found in GitHub repository '{owner}/{name}'.");
+
+        return index;
+    }
 
     private static HttpClient CreateHttpClient()
     {
