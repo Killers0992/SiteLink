@@ -2,6 +2,13 @@
 
 public class RemoteConnection : Connection
 {
+    internal enum DisconnectDelivery
+    {
+        Transport,
+        BootstrapSession,
+        SessionRpc
+    }
+
     public static Dictionary<string, RemoteConnection> ConnectionByUserId = new Dictionary<string, RemoteConnection>();
 
     public static bool TryGet(string userId, out RemoteConnection connection) => ConnectionByUserId.TryGetValue(userId, out connection);
@@ -131,27 +138,55 @@ public class RemoteConnection : Connection
 
     public override void Disconnect(string message = null)
     {
-        if (message != null && Session != null)
+        switch (SelectDisconnectDelivery(message, Request != null, Session != null))
         {
-            AsServer.Send(wr =>
-            {
-                int id = -2106075371;
-
-                wr.WriteUShort(NetworkMessages.RpcMessage);
-                wr.WriteUInt(Session.NetworkId);
-                wr.WriteByte(1);
-                wr.WriteUShort((ushort)id);
-
-                NetworkWriter messageWriter = new NetworkWriter();
-                messageWriter.WriteString(message);
-
-                wr.WriteArraySegmentAndSize(messageWriter.ToArraySegment());
-            });
-
-            return;
+            case DisconnectDelivery.BootstrapSession:
+                if (SessionManager.Singleton?.BeginDisconnect(this, message) == true)
+                    return;
+                break;
+            case DisconnectDelivery.SessionRpc:
+                Execute(() =>
+                {
+                    if (!IsDisposed)
+                        SendDisconnectError(message);
+                });
+                return;
         }
 
         base.Disconnect(message);
+    }
+
+    internal static DisconnectDelivery SelectDisconnectDelivery(string message, bool hasRequest, bool hasSession)
+    {
+        if (message != null && hasRequest)
+            return DisconnectDelivery.BootstrapSession;
+
+        if (message != null && hasSession)
+            return DisconnectDelivery.SessionRpc;
+
+        return DisconnectDelivery.Transport;
+    }
+
+    internal void SendDisconnectError(string message)
+    {
+        Session session = Session;
+        if (session == null)
+            return;
+
+        AsServer.Send(writer => WriteDisconnectError(writer, session.NetworkId, message));
+    }
+
+    internal static void WriteDisconnectError(NetworkWriter writer, uint networkId, string message)
+    {
+        writer.WriteUShort(NetworkMessages.RpcMessage);
+        writer.WriteUInt(networkId);
+        writer.WriteByte(1);
+        writer.WriteUShort(unchecked((ushort)-2106075371));
+
+        NetworkWriter messageWriter = new NetworkWriter();
+        messageWriter.WriteString(message);
+
+        writer.WriteArraySegmentAndSize(messageWriter.ToArraySegment());
     }
 
     public override void Disconnected()

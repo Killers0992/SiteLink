@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink.Protocol", "SiteLi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink.PackageTool", "SiteLink.PackageTool\SiteLink.PackageTool.csproj", "{7B34B966-3532-4F92-A896-E781ECBAEAC1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiteLink.Tests", "SiteLink.Tests\SiteLink.Tests.csproj", "{E071365F-E25B-43C6-81B7-44545A55F778}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -65,6 +67,10 @@ Global
 		{7B34B966-3532-4F92-A896-E781ECBAEAC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B34B966-3532-4F92-A896-E781ECBAEAC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B34B966-3532-4F92-A896-E781ECBAEAC1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E071365F-E25B-43C6-81B7-44545A55F778}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E071365F-E25B-43C6-81B7-44545A55F778}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E071365F-E25B-43C6-81B7-44545A55F778}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E071365F-E25B-43C6-81B7-44545A55F778}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
