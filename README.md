@@ -183,4 +183,109 @@ listeners:
 If server is still not visbile make sure to run central command:
 - ``central main public`` ( it shows your main listener on serverlist )
 
+# 🌉 SiteLink.Bridge (game server plugin)
+
+`SiteLink.Bridge` is a LabAPI plugin that connects a SCP:SL game server back to the proxy.
+It is optional, but without it the proxy has to guess your player count, and with more than
+one proxy in front of the same game server that guess is wrong.
+
+## Why you want it
+
+Rule 5.6 of the CSGD requires the data reported to the central servers — including the
+player count — to be accurate. A proxy only knows about the sessions it is holding itself.
+Run two proxies and each one reports its own slice, so neither number matches reality.
+The bridge makes the game server report its own count, and the proxy uses that instead.
+
+Dummies and the host are never counted.
+
+## Installation
+
+1. Download `dependencies.zip` and `SiteLink.Bridge.dll` from the
+   [releases](https://github.com/Killers0992/SiteLink/releases) page.
+2. Extract `dependencies.zip` into `LabAPI/dependencies/global`
+   (this is `SiteLink.API.dll`).
+3. Drop `SiteLink.Bridge.dll` into `LabAPI/plugins/global` (or `LabAPI/plugins/<port>`).
+4. Start the game server once to generate
+   `LabAPI/configs/<port>/SiteLink.Bridge/config.yml`.
+
+## Game server configuration
+
+`LabAPI/configs/<port>/SiteLink.Bridge/config.yml`:
+
+```yml
+# Address of the SiteLink proxy this game server should connect to.
+ip: 127.0.0.1
+
+# Port of the SiteLink proxy this game server should connect to.
+port: 7777
+
+# Must match 'secret_key' under the server's bridge settings in the proxy config.
+secret_key: '---'
+
+# Print connection state changes and player count reports to the server console.
+debug: true
+
+# How often, in seconds, the current player count is reported to the proxy.
+player_count_report_interval: 5
+
+# Report the player count to the proxy.
+report_player_count: true
+```
+
+## Proxy configuration
+
+Enable the bridge on the matching server entry and use the same secret, then point the
+listener's player count at that server:
+
+```yml
+servers:
+-
+  name: default
+  ip: 127.0.0.1
+  port: 7777
+
+  bridge:
+    enabled: true
+    secret_key: '---'
+
+listeners:
+-
+  name: main
+  server_list:
+    take_player_count_from_server: default
+```
+
+When the bridge is connected, the proxy reports the game server's count. If the bridge goes
+away, the proxy warns once and falls back to its own session count after 30 seconds.
+
+## Commands
+
+| Command | Where | Description |
+|---|---|---|
+| `.gsh` | game server | Lists the target servers advertised by the proxy (the ones in `servers_in_selector`). |
+| `.slbridge` | game server | Connection state, proxy endpoint, last reported count, raw/dummy counts and target servers. |
+
+## Writing your own plugin against the bridge
+
+`SiteLink.API.dll` is usable on its own if you would rather write your own plugin:
+
+```csharp
+SiteLinkBridge.Initialize("127.0.0.1", 7777, "---");
+
+SiteLinkBridge.RegisterConnectedHandler(() => Logger.Info("Connected"));
+SiteLinkBridge.RegisterDisconnectedHandler(info => Logger.Warn($"Lost: {info.Reason}"));
+
+// Game server -> proxy
+SiteLinkBridge.Send(1001, writer => writer.Put("hello"));
+
+// Proxy -> game server (on the proxy side)
+SiteLinkBridge.SendTo(server, 1001, writer => writer.Put("hello"));
+
+// Both sides
+SiteLinkBridge.RegisterHandler(1001, reader => { /* ... */ });
+```
+
+Message ids `17150` (target server list) and `17151` (player count) are reserved by
+SiteLink itself.
+
 > 🧱 *SiteLink — bridging SCP:SL servers into one connected network.*

@@ -1,0 +1,181 @@
+using System;
+using LabApi.Features.Wrappers;
+using UnityEngine;
+using SiteLink.API;
+
+namespace SiteLink.Bridge
+{
+    /// <summary>
+    /// Reports how many real players this game server is hosting to the proxy.
+    /// <para>
+    /// The proxy cannot count this itself: with more than one proxy in front of the same
+    /// game server, each proxy only sees the sessions it owns. CSGD 5.6 requires the number
+    /// reported to the central servers to be accurate, so the game server is the only
+    /// authority.
+    /// </para>
+    /// </summary>
+    public static class PlayerCountReporter
+    {
+        private const float MinimumInterval = 1f;
+
+        private static GameObject _tickerObject;
+        private static bool _running;
+
+        /// <summary>Player count sent in the last report, or -1 if nothing was sent yet.</summary>
+        public static int LastReportedCount { get; private set; } = -1;
+
+        /// <summary>Slot count sent in the last report, or -1 if nothing was sent yet.</summary>
+        public static int LastReportedMax { get; private set; } = -1;
+
+        /// <summary>Number of entries in <c>Player.List</c> at the last count, dummies and host included.</summary>
+        public static int LastRawCount { get; private set; } = -1;
+
+        /// <summary>Number of dummies excluded at the last count.</summary>
+        public static int LastDummyCount { get; private set; } = -1;
+
+        public static void Start()
+        {
+            if (_running)
+                return;
+
+            _running = true;
+
+            _tickerObject = new GameObject("SiteLinkBridgeTicker");
+            UnityEngine.Object.DontDestroyOnLoad(_tickerObject);
+            _tickerObject.AddComponent<PlayerCountTicker>();
+        }
+
+        public static void Stop()
+        {
+            _running = false;
+
+            if (_tickerObject != null)
+            {
+                UnityEngine.Object.Destroy(_tickerObject);
+                _tickerObject = null;
+            }
+
+            LastReportedCount = -1;
+            LastReportedMax = -1;
+            LastRawCount = -1;
+            LastDummyCount = -1;
+        }
+
+        internal static float Interval
+        {
+            get
+            {
+                BridgeConfig config = SiteLinkBridgePlugin.Instance?.Config;
+
+                if (config == null)
+                    return 5f;
+
+                return config.PlayerCountReportInterval < MinimumInterval
+                    ? MinimumInterval
+                    : config.PlayerCountReportInterval;
+            }
+        }
+
+        /// <summary>
+        /// Counts the players that should be reported to the central servers.
+        /// The host is not a player, and neither are dummies - counting them would report
+        /// numbers that do not correspond to anyone actually playing.
+        /// </summary>
+        public static int CountPlayers(out int raw, out int dummies)
+        {
+            raw = 0;
+            dummies = 0;
+
+            int counted = 0;
+
+            foreach (Player player in Player.List)
+            {
+                raw++;
+
+                if (player == null || player.IsHost)
+                    continue;
+
+                if (player.IsDummy)
+                {
+                    dummies++;
+                    continue;
+                }
+
+                counted++;
+            }
+
+            return counted;
+        }
+
+        /// <summary>
+        /// Counts the current players and pushes them to the proxy. Sending unconditionally
+        /// on a timer rather than only on change means a bridge reconnect heals itself
+        /// without any extra handshake.
+        /// </summary>
+        public static void Report()
+        {
+            if (!SiteLinkBridge.IsConnected)
+                return;
+
+            BridgeConfig config = SiteLinkBridgePlugin.Instance?.Config;
+
+            if (config != null && !config.ReportPlayerCount)
+                return;
+
+            int players = CountPlayers(out int raw, out int dummies);
+            int maxPlayers = GetMaxPlayers();
+
+            LastRawCount = raw;
+            LastDummyCount = dummies;
+
+            bool changed = players != LastReportedCount || maxPlayers != LastReportedMax;
+
+            LastReportedCount = players;
+            LastReportedMax = maxPlayers;
+
+            SiteLinkBridge.Send(SiteLinkBridge.MsgPlayerCount, writer =>
+            {
+                writer.Put(players);
+                writer.Put(maxPlayers);
+            });
+
+            if (changed && config != null && config.Debug)
+                SiteLinkBridgePlugin.Log($"Reported {players}/{maxPlayers} players to the proxy (excluded {dummies} dummies).");
+        }
+
+        private static int GetMaxPlayers()
+        {
+            try
+            {
+                return LabApi.Features.Wrappers.Server.MaxPlayers;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private sealed class PlayerCountTicker : MonoBehaviour
+        {
+            private void Start()
+            {
+                float interval = Interval;
+                InvokeRepeating(nameof(Tick), interval, interval);
+            }
+
+            private void Tick()
+            {
+                try
+                {
+                    Report();
+                }
+                catch (Exception ex)
+                {
+                    // A throwing report must not kill the repeating invoke, otherwise the
+                    // proxy silently falls back to its own inaccurate count forever.
+                    SiteLinkBridgePlugin.LogError($"Player count report failed: {ex}");
+                }
+            }
+        }
+    }
+}

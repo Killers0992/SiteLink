@@ -33,6 +33,7 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
 		<PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.9" Condition="'$(TargetFramework)' == 'net10.0'" />
+		<PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" Condition="'$(TargetFramework)' == 'net48'" />
 		<PackageReference Include="MySqlConnector" Version="2.4.0" Condition="'$(TargetFramework)' == 'net10.0'" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="RestSharp" Version="113.1.0" />
@@ -46,9 +47,9 @@
 			<HintPath>$(SL_REFERENCES)\Assembly-CSharp.dll</HintPath>
 		</Reference>
 
-		<Reference Include="mscorlib" Condition="'$(TargetFramework)' == 'net48'">
-			<HintPath>$(SL_REFERENCES)\mscorlib.dll</HintPath>
-		</Reference>
+		<!-- mscorlib comes from the .NET Framework reference assemblies. Referencing the
+		     game's Unity-flavoured copy instead makes the identity ambiguous on non-Windows
+		     build agents. -->
 
 		<Reference Include="CommandSystem.Core" Condition="'$(TargetFramework)' == 'net48'">
 			<HintPath>$(SL_REFERENCES)\CommandSystem.Core.dll</HintPath>
@@ -80,7 +81,7 @@
 	  <ProjectReference Include="..\SiteLink.Protocol\SiteLink.Protocol.csproj" Condition="'$(TargetFramework)' == 'net10.0'" />
 	</ItemGroup>
 
-	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net48'">
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net48' AND '$(OS)' == 'Windows_NT'">
 		<Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="C:\Users\Kille\AppData\Roaming\SCP Secret Laboratory\LabAPI\dependencies\global" ContinueOnError="WarnAndContinue" />
 	</Target>
 
