@@ -8,8 +8,9 @@
         <Product>SiteLink</Product>
         <Description>Multi-server proxy for SCP: Secret Laboratory.</Description>
         <Authors>Killers0992</Authors>
-        <Version>1.0.1</Version>
-    </PropertyGroup>
+        <Version>2.1.2</Version>
+		<RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+	</PropertyGroup>
 
     <PropertyGroup>
 	    <PublishSingleFile>true</PublishSingleFile>
