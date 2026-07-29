@@ -27,6 +27,9 @@ env:
   WINDOWS_OUTPUT: "${{ github.workspace }}/publish/win-x64"
   LINUX_OUTPUT: "${{ github.workspace }}/publish/linux-x64"
 
+  SL_REFERENCES: "${{ github.workspace }}/References"
+  UNITY_REFERENCES: "${{ github.workspace }}/References"
+
 jobs:
   build:
     name: Build and publish release
@@ -40,6 +43,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
+      - name: Download SCP SL references
+        uses: killers0992/scpsl.downloadfiles@master
+        with:
+          branch: "public"
+          filesToDownload: "BouncyCastle.Cryptography.dll,UnityEngine.CoreModule.dll,Mirror.dll,Assembly-CSharp.dll,Unity.TextMeshPro.dll"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -89,23 +98,21 @@ jobs:
         run: |
           dotnet publish "${{ env.PROJECT_PATH }}" \
             --configuration Release \
-            --runtime "${{ env.WINDOWS_RUNTIME }}" \
+            --runtime win-x64 \
             --self-contained true \
-            --no-restore \
             --output "${{ env.WINDOWS_OUTPUT }}" \
             -p:Version="${{ steps.version.outputs.version }}" \
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:DebugType=None \
             -p:DebugSymbols=false
-
+      
       - name: Publish Linux x64
         run: |
           dotnet publish "${{ env.PROJECT_PATH }}" \
             --configuration Release \
-            --runtime "${{ env.LINUX_RUNTIME }}" \
+            --runtime linux-x64 \
             --self-contained true \
-            --no-restore \
             --output "${{ env.LINUX_OUTPUT }}" \
             -p:Version="${{ steps.version.outputs.version }}" \
             -p:PublishSingleFile=true \
