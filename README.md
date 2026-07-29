@@ -282,6 +282,16 @@ listeners:
 The `secret_key` is what identifies the game server, so give every server its own. Changing
 the `bridge` block requires a proxy restart; `reload` does not pick it up.
 
+If the game server logs `Proxy <ip>:<port> rejected the bridge`, the proxy refused the
+handshake and its console says why on the same line, for example:
+
+```
+[WARN] [Bridge] Bridge from 10.0.0.5 rejected, its secret key (length 11) matches no server with the bridge enabled: vanilla (key length 10).
+```
+
+The key lengths are printed instead of the keys, which is usually enough to spot a trailing
+space or a mismatched value.
+
 When the bridge is connected, the proxy reports the game server's count. If the bridge goes
 away, the proxy warns once and falls back to its own session count after 30 seconds.
 

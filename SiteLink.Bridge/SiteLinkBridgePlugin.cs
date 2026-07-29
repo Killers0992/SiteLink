@@ -124,6 +124,9 @@ namespace SiteLink.Bridge
                     continue;
                 }
 
+                if (string.IsNullOrEmpty(entry.SecretKey))
+                    Logger.Warn($"[SiteLink.Bridge] Proxy {entry} has an empty 'secret_key'; it will reject this bridge.");
+
                 endpoints.Add(new BridgeEndpoint(entry.Ip, entry.Port, entry.SecretKey));
             }
 
@@ -159,6 +162,15 @@ namespace SiteLink.Bridge
 
         private void OnDisconnected(BridgeEndpoint endpoint, DisconnectInfo info)
         {
+            // ConnectionRejected is always a configuration problem, never a transient one, so
+            // it is worth a line even with debug off - otherwise the bridge retries forever
+            // in silence and nobody learns why.
+            if (info.Reason == DisconnectReason.ConnectionRejected)
+            {
+                Logger.Warn($"[SiteLink.Bridge] Proxy {endpoint} rejected the bridge. Its 'secret_key' ({endpoint.SecretKey?.Length ?? 0} characters) has to match 'bridge.secret_key' of a server with 'bridge.enabled: true' in that proxy's settings.yml. Retrying...");
+                return;
+            }
+
             if (Config != null && Config.Debug)
                 Logger.Warn($"[SiteLink.Bridge] Disconnected from proxy {endpoint}: {info.Reason}. Retrying...");
         }

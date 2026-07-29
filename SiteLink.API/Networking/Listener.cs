@@ -560,9 +560,16 @@ public class Listener : IDisposable
         // rejected here instead of being routed to a backend server by accident.
         if (IsBridgeOnly && preAuth.ClientType != ClientType.Bridge)
         {
+            SiteLinkLogger.Warn($"{Tag} Rejected {preAuth.ClientType} from {connectionIpAddress}, this endpoint only accepts bridges.");
+
             request.RejectWithReason(RequestWriter, RejectionReason.VerificationRejected);
             return;
         }
+
+        // A bridge that reaches a game listener still works, but the operator wanted the
+        // dedicated endpoint and should be told the plugin is aimed at the wrong port.
+        if (!IsBridgeOnly && preAuth.ClientType == ClientType.Bridge)
+            SiteLinkLogger.Warn($"{Tag} Bridge from {connectionIpAddress} connected to a game client listener. Point its 'port' at the bridge endpoint instead.");
 
         switch (preAuth.ClientType)
         {
