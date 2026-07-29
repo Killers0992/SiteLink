@@ -1,6 +1,6 @@
-﻿namespace SiteLink.Services;
+namespace SiteLink.Services;
 
 public class BuildInformation
 {
-    public const string VersionText = "1.0.1";
+    public static string VersionText => SiteLink.API.SiteLinkAPI.ApiVersionText;
 }

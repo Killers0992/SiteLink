@@ -1,4 +1,4 @@
-﻿using SiteLink.API;
+using SiteLink.API;
 
 [assembly: AssemblyProduct("SiteLinkAPI")]
 [assembly: AssemblyCopyright("Killers0992 @ 2026")]
@@ -12,7 +12,7 @@ public class SiteLinkAPI
     static Version _apiVersion;
 
     public const string GameVersionText = "14.2.7";
-    public const string ApiVersionText = "2.1.2";
+    public const string ApiVersionText = "2.1.3";
 
     public static int ThresholdBytes => 65535 * (NetConstants.MaxPacketSize - 6);
 
