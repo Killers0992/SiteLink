@@ -186,15 +186,28 @@ If server is still not visbile make sure to run central command:
 # 🌉 SiteLink.Bridge (game server plugin)
 
 `SiteLink.Bridge` is a LabAPI plugin that connects a SCP:SL game server back to the proxy.
-It is optional, but without it the proxy has to guess your player count, and with more than
-one proxy in front of the same game server that guess is wrong.
+It is optional. It reports the game server's real player count and what the round is
+doing, both of which the proxy would otherwise have to infer from the outside.
 
 ## Why you want it
 
 Rule 5.6 of the CSG requires the data reported to the central servers — including the
-player count — to be accurate. A proxy only knows about the sessions it is holding itself.
-Run two proxies and each one reports its own slice, so neither number matches reality.
-The bridge makes the game server report its own count, and the proxy uses that instead.
+player count — to be accurate. What "accurate" means is that the number on the list
+matches the server the player actually ends up on: nobody should join a 50/50 listing and
+land in an empty room.
+
+A proxy only knows about the sessions it is holding itself. Run two proxies in front of
+one game server and each reports its own slice, so neither number is the count of the
+server the player will connect to. The bridge fixes that by letting the game server report
+its own count.
+
+This only applies to a listener that puts everyone on one game server — a lobby setup.
+Nothing changes unless you ask for it: the bridge count is used only when a listener sets
+`server_list.take_player_count_from_server` to a server that has the bridge enabled.
+Leave that setting empty and the listener reports its own session count exactly as before.
+
+A listener that routes players across several servers has no single number to report, so
+it should not use this at all; put the individual counts in the server name instead.
 
 Dummies and the host are never counted.
 
@@ -292,8 +305,9 @@ handshake and its console says why on the same line, for example:
 The key lengths are printed instead of the keys, which is usually enough to spot a trailing
 space or a mismatched value.
 
-When the bridge is connected, the proxy reports the game server's count. If the bridge goes
-away, the proxy warns once and falls back to its own session count after 30 seconds.
+With `take_player_count_from_server` pointed at a bridged server, the proxy reports that
+game server's count. If the bridge goes away, the proxy warns once and falls back to its
+own session count for that server after 30 seconds.
 
 ## Round state
 
