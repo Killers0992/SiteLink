@@ -23,6 +23,32 @@ public static class Extensions
         request.RejectForce(writer);
     }
 
+    /// <summary>
+    /// Rejects a connection request the way the game server does while it is restarting:
+    /// <see cref="RejectionReason.Delay"/> followed by the number of seconds the client
+    /// should wait before it tries again.
+    /// <para>
+    /// This is the mechanism that keeps a player from being lost across a restart. The
+    /// client stays in its own reconnect loop and comes back by itself, so the proxy does
+    /// not have to hold a half-connected client on a facility that is not being simulated.
+    /// </para>
+    /// </summary>
+    /// <param name="delaySeconds">Seconds the client is asked to wait before retrying.</param>
+    public static void RejectWithDelay(
+        this ConnectionRequest request,
+        NetDataWriter writer,
+        byte delaySeconds)
+    {
+        writer.Reset();
+        writer.Put((byte)RejectionReason.Delay);
+        writer.Put(delaySeconds);
+
+        // Not forced, matching the game server: the request stays known for a moment so a
+        // duplicate connect packet from the same attempt gets the same answer instead of
+        // producing a second peer.
+        request.Reject(writer);
+    }
+
     public static string ParseVersion(this string version)
     {
         if (_version != version)

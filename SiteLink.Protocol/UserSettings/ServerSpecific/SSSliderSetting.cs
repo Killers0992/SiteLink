@@ -38,6 +38,17 @@ namespace UserSettings.ServerSpecific
 			}
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteFloat (DefaultValue);
+			writer.WriteFloat (MinValue);
+			writer.WriteFloat (MaxValue);
+			writer.WriteBool (Integer);
+			writer.WriteString (ValueToStringFormat);
+			writer.WriteString (FinalDisplayFormat);
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 			SyncFloatValue = DefaultValue;

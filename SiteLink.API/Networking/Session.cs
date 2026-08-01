@@ -6,6 +6,7 @@ using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
 using RoundRestarting;
+using UserSettings.ServerSpecific;
 
 namespace SiteLink.API.Networking
 {
@@ -76,6 +77,9 @@ namespace SiteLink.API.Networking
                     Server?.OnSessionSpawned(this);
 
                 _isSpawned = value;
+
+                if (value && Connection != null)
+                    Connection.HasEverSpawned = true;
             }
         }
 
@@ -188,8 +192,22 @@ namespace SiteLink.API.Networking
 
                 Nickname = $"Unknown";
                 UserId = value.PreAuth.UserId;
+
+                PreAuth = value.PreAuth;
             }
         }
+
+        /// <summary>
+        /// The credentials this session connects to game servers with.
+        /// <para>
+        /// Kept on the session instead of read from <see cref="Connection"/> on demand,
+        /// because a restart recovery has to reconnect to the game server while the client is
+        /// away on its own reconnect countdown - there is no connection to read at that
+        /// point. The copy is refreshed every time the client comes back, so the preauth the
+        /// game server is handed is never older than the client's last attempt.
+        /// </para>
+        /// </summary>
+        internal PreAuth PreAuth { get; private set; }
 
         private Server _server;
 
@@ -203,6 +221,21 @@ namespace SiteLink.API.Networking
         public Server ConnectingToServer;
 
         public DateTime AliveUntil { get; set; } = DateTime.MinValue;
+
+        /// <summary>
+        /// Latest moment a client that left because of a game server restart may still claim
+        /// this session back. <see cref="DateTime.MinValue"/> means the default detach grace
+        /// applies.
+        /// <para>
+        /// A restart hands the client back to its own reconnect countdown, which is up to
+        /// <c>full_restart_rejoin_time</c> (25 seconds by default) - far longer than the ten
+        /// seconds a detached session normally survives. Without this the session expired
+        /// while the player was still staring at the vanilla restart screen, and they came
+        /// back as a brand new connection that got routed by priority instead of back to the
+        /// server they were playing on.
+        /// </para>
+        /// </summary>
+        public DateTime ReconnectDeadline { get; internal set; } = DateTime.MinValue;
 
         public DateTime? DetachedAtUtc { get; set; }
 
@@ -238,6 +271,100 @@ namespace SiteLink.API.Networking
         private bool _shutdownRetryFinished;
         private float _recoveryInitialDelay;
 
+        /// <summary>
+        /// How often the recovery hint is re-sent while the game server is away.
+        /// <para>
+        /// Hints replace each other on the client and then fade, so a single hint sent once
+        /// per reconnect attempt left the screen blank for most of the outage - which is
+        /// what made players think the server had frozen and quit. Refreshing faster than
+        /// the hint's own lifetime keeps one continuous message on screen.
+        /// </para>
+        /// </summary>
+        private static readonly TimeSpan RecoveryHintInterval = TimeSpan.FromSeconds(1);
+
+        /// <summary>Hint lifetime, deliberately longer than the refresh interval so it never blinks.</summary>
+        private const float RecoveryHintDuration = 2.5f;
+
+        private DateTime _nextRecoveryHint = DateTime.MaxValue;
+
+        /// <summary>
+        /// Slack added on top of the restart offset before a detached session gives up on the
+        /// client coming back.
+        /// <para>
+        /// The client waits the offset, then loads a scene, then re-authenticates against the
+        /// central servers - none of which is instant, and none of which the proxy can see.
+        /// Expiring a heartbeat early costs the player their slot for no reason, so the window
+        /// is generous; a client that really left still frees the session when the grace runs
+        /// out.
+        /// </para>
+        /// </summary>
+        private const double RestartReconnectGraceSeconds = 25.0;
+
+        /// <summary>
+        /// When the proxy drops the client itself to finish the restart it just announced.
+        /// <see cref="DateTime.MaxValue"/> while no restart is pending.
+        /// </summary>
+        private DateTime _restartDropClientAt = DateTime.MaxValue;
+
+        /// <summary>
+        /// How long the restart message gets to reach the client before its socket is closed.
+        /// Long enough for the batch it rides in to be flushed, short enough that the player
+        /// does not stare at a frozen facility first.
+        /// </summary>
+        private const double RestartClientDropDelaySeconds = 1.0;
+
+        /// <summary>
+        /// The countdown the client is given when a game server restart sends it away.
+        /// <para>
+        /// The game server's own offset (5s for a round restart, <c>full_restart_rejoin_time</c>
+        /// - 25s by default - for a full one) describes how long <em>it</em> needs. The client is
+        /// not coming back to it; it is coming back to the proxy, which never went down. So it
+        /// gets a short countdown and is then delayed at the door, exactly like the game server
+        /// delays connections while it boots. Waiting 25 seconds on a black screen for a proxy
+        /// that is already listening is pure loss.
+        /// </para>
+        /// </summary>
+        private const float RestartClientReconnectOffsetSeconds = 2f;
+
+        /// <summary>
+        /// Fallback for how long a returning client is asked to wait when the bridge did not
+        /// report the game server's own <c>connections_delay_time</c>. Matches the vanilla
+        /// default.
+        /// </summary>
+        private const float RestartClientRetryIntervalSeconds = 5f;
+
+        /// <summary>
+        /// The longest a recovery is allowed to hold a player's seat on a server that has not
+        /// come back.
+        /// <para>
+        /// Every time the player knocks the retry budget starts over, because a full process
+        /// restart takes longer than any fixed attempt count covers. That refresh needs an end:
+        /// without one, a server that is never coming back would keep a player in a delay loop
+        /// forever instead of letting them be routed to a fallback. Generous enough for a real
+        /// <c>sr</c>, short enough that a dead server is not a life sentence.
+        /// </para>
+        /// </summary>
+        private const double RecoveryMaxSeconds = 120.0;
+
+        /// <summary>
+        /// When the recovery stops refreshing its retry budget. See <see cref="RecoveryMaxSeconds"/>.
+        /// </summary>
+        private DateTime _recoveryGiveUpAt = DateTime.MaxValue;
+
+        /// <summary>
+        /// Set once the bridge has told us the game server came back and is accepting
+        /// connections, so the countdown can stop lying about waiting.
+        /// </summary>
+        private bool _recoveryServerBack;
+
+        /// <summary>
+        /// Whether a restart recovery reconnect is in flight with no client attached. Failures
+        /// of such an attempt mean "the game server is not up yet" and nothing else, so they
+        /// are handled as a reschedule instead of running the normal disconnect logic - there
+        /// is no player to inform and no fallback to offer while the player is still knocking.
+        /// </summary>
+        private bool _recoveryInPlace;
+
         public uint NetworkId { get; private set; }
         public string Nickname { get; set; }
         public string UserId { get; private set; }
@@ -245,6 +372,26 @@ namespace SiteLink.API.Networking
         public int MapSeed { get; private set; } = -1;
 
         public bool IsRestarting { get; private set; }
+
+        /// <summary>
+        /// Whether this session is holding a player's seat while the game server behind it
+        /// restarts, and the recovery still has attempts left.
+        /// <para>
+        /// A client that comes back during this window is sent away again with
+        /// <see cref="RejectionReason.Delay"/> rather than accepted, because there is no
+        /// facility to hand it yet. Once the recovery has given up this reads false, so the
+        /// player is let in and routed like a fresh join instead of being delayed forever.
+        /// </para>
+        /// </summary>
+        internal bool IsAwaitingRestartRecovery =>
+            IsRestarting && _shutdownRetryServer != null && !_shutdownRetryFinished;
+
+        /// <summary>
+        /// Set on the replacement session that a shutdown/restart recovery creates, so that
+        /// connecting resumes the player in place instead of running the server-switch path.
+        /// </summary>
+        internal bool IsRecoveryRetry { get; set; }
+
         public bool IsReady { get; internal set; }
         public bool IsConnectionConnected => Connection != null;
         public bool IsConnectedToSimulated { get; private set; }
@@ -305,6 +452,64 @@ namespace SiteLink.API.Networking
             _serverToClient.Register(NetworkMessages.NetworkPingMessage, OnPing);
             _serverToClient.Register(NetworkMessages.SpawnMessage, OnSpawn);
             _serverToClient.Register(NetworkMessages.RoundRestartMessage, OnRestart);
+            _serverToClient.Register(NetworkMessages.SSSEntriesPack, OnServerSpecificEntries);
+        }
+
+        /// <summary>
+        /// True once the game server has sent its own server-specific settings for this
+        /// session. Until then there is nothing to append to.
+        /// </summary>
+        public bool HasGameServerSettings { get; private set; }
+
+        /// <summary>
+        /// Appends the proxy's own server-specific settings to the pack the game server
+        /// sends.
+        /// <para>
+        /// Sending a separate pack does not work: the client keeps one set of entries per
+        /// server, so whichever pack arrives last wins and the other side's settings vanish.
+        /// The entries the game server wrote are copied through verbatim - they never need to
+        /// be deserialized, only counted.
+        /// </para>
+        /// </summary>
+        private InterceptResult OnServerSpecificEntries(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
+        {
+            session.HasGameServerSettings = true;
+
+            ServerSpecificSettingBase[] extra = session.Server?.GetExtraServerSpecificEntries(session);
+
+            if (extra == null || extra.Length == 0)
+                return InterceptResult.Pass();
+
+            if (reader.Remaining < sizeof(int) + sizeof(byte))
+                return InterceptResult.Pass();
+
+            int version = reader.ReadInt();
+            int count = reader.ReadByte();
+
+            if (count + extra.Length > byte.MaxValue)
+            {
+                SiteLinkLogger.Warn($"{Connection?.Tag} Cannot append {extra.Length} server-specific entries: the game server already sent {count} and the wire format caps the total at {byte.MaxValue}.");
+                return InterceptResult.Pass();
+            }
+
+            ArraySegment<byte> gameServerEntries = reader.ReadBytesSegment(reader.Remaining);
+
+            NetworkWriter writer = new NetworkWriter();
+
+            writer.WriteUShort(NetworkMessages.SSSEntriesPack);
+            writer.WriteInt(version);
+            writer.WriteByte((byte)(count + extra.Length));
+
+            if (gameServerEntries.Count > 0)
+                writer.WriteBytes(gameServerEntries.Array, gameServerEntries.Offset, gameServerEntries.Count);
+
+            foreach (ServerSpecificSettingBase setting in extra)
+            {
+                writer.WriteByte(ServerSpecificSettingsSync.GetCodeFromType(setting.GetType()));
+                setting.SerializeEntry(writer);
+            }
+
+            return InterceptResult.Replace(writer.ToArraySegment());
         }
 
         private InterceptResult OnRestart(ushort id, NetworkReader reader, ArraySegment<byte> original, Session session)
@@ -313,8 +518,26 @@ namespace SiteLink.API.Networking
 
             switch (type)
             {
+                // A fast restart tells the client to come back immediately and gives it no
+                // countdown to display, which on a proxy reads as the screen simply blinking:
+                // the facility reloads and the player never learns the round restarted. The
+                // client is told about a full restart instead, so it gets the same waiting
+                // screen every other restart produces, and the proxy holds its session for
+                // the trip.
                 case RoundRestartType.FastRestart:
-                    return InterceptResult.Pass();
+                    SiteLinkLogger.Info($"{Connection?.Tag} Server is performing a fast restart.");
+
+                    IsRestarting = true;
+
+                    // A fast restart announces no delay of its own; without a bridge to tell
+                    // us when it finished, the transport's own connection delay is the best
+                    // estimate we have.
+                    float fastRestartDelay = Math.Max(3f, session.Server?.BridgeConnectionDelaySeconds ?? 0);
+
+                    session.BeginRestartRecovery(fastRestartDelay, extendedReconnectionPeriod: true);
+                    return InterceptResult.Replace(
+                        MirrorMessagesEx.BuildFullRestart(RestartClientReconnectOffsetSeconds, extendedReconnectionPeriod: true)
+                    );
 
                 case RoundRestartType.RedirectRestart:
                     return InterceptResult.Pass();
@@ -330,8 +553,15 @@ namespace SiteLink.API.Networking
                     SiteLinkLogger.Info($"{Connection?.Tag} Server closed the connection, likely due to restart.");
 
                     IsRestarting = true;
+
+                    // The recovery still runs on the offset the game server picked - that is
+                    // its own estimate of when it will be back. The client gets a short one
+                    // instead: it is reconnecting to the proxy, not to the game server, and it
+                    // is delayed at the door until the game server is actually up.
                     session.BeginRestartRecovery(restartDelay, extendedReconnectionPeriod);
-                    return InterceptResult.Drop();
+                    return InterceptResult.Replace(
+                        MirrorMessagesEx.BuildFullRestart(RestartClientReconnectOffsetSeconds, extendedReconnectionPeriod)
+                    );
 
                 default:
                     return InterceptResult.Pass();
@@ -406,6 +636,56 @@ namespace SiteLink.API.Networking
         {
             Connection = connection;
             IsDetached = false;
+
+            // The client is back; whatever extra grace a restart bought it has been spent.
+            ReconnectDeadline = DateTime.MinValue;
+        }
+
+        /// <summary>
+        /// Records the credentials of a client that knocked on the listener but was sent away
+        /// again, and extends the session's lifetime because the player is provably still
+        /// waiting.
+        /// <para>
+        /// A preauth expires, so the copy taken when the session was created is worthless by
+        /// the time a long restart is over. The one the client just presented is fresh.
+        /// </para>
+        /// </summary>
+        internal void NoteClientStillWaiting(PreAuth preAuth, double keepAliveSeconds)
+        {
+            PreAuth = preAuth;
+
+            DateTime until = DateTime.UtcNow.AddSeconds(keepAliveSeconds);
+
+            if (AliveUntil < until)
+                AliveUntil = until;
+
+            if (ReconnectDeadline < until)
+                ReconnectDeadline = until;
+
+            // The retry budget exists so a player is not held forever on a server that is never
+            // coming back. That player is right here, knocking, so the budget starts over - a
+            // full restart can take longer than any fixed number of attempts covers. The refresh
+            // stops at _recoveryGiveUpAt, after which the attempts drain and they get routed
+            // somewhere that actually answers.
+            if (DateTime.UtcNow < _recoveryGiveUpAt)
+                _shutdownRetryAttemptsMade = 0;
+        }
+
+        /// <summary>
+        /// How long a client that arrives while the game server is still coming up should be
+        /// asked to wait. The game server's own delay is preferred when the bridge reported
+        /// one, so the proxy and the server behind it count down together.
+        /// </summary>
+        internal byte GetConnectionDelaySeconds()
+        {
+            Server server = _shutdownRetryServer ?? Server;
+
+            int delay = server?.BridgeConnectionDelaySeconds ?? 0;
+
+            if (delay <= 0)
+                delay = (int)RestartClientRetryIntervalSeconds;
+
+            return (byte)Math.Clamp(delay, 1, 15);
         }
 
         /// <summary>
@@ -449,7 +729,7 @@ namespace SiteLink.API.Networking
                     );
 
                     SessionManager.Singleton.FailPending(
-                        Connection?.PreAuth.UserId,
+                        UserId,
                         this,
                         "Simulated server rejected connection"
                     );
@@ -467,7 +747,7 @@ namespace SiteLink.API.Networking
 
             EnsureNet();
 
-            _netManager.Connect(ConnectingToServer.IpAddress, ConnectingToServer.Port, Connection.PreAuth.Create(ConnectingToServer.ForwardIpAddress, challengeId, challengeResponse));
+            _netManager.Connect(ConnectingToServer.IpAddress, ConnectingToServer.Port, PreAuth.Create(ConnectingToServer.ForwardIpAddress, challengeId, challengeResponse));
         }
 
         public void RetryConnect(TimeSpan delay)
@@ -506,7 +786,9 @@ namespace SiteLink.API.Networking
             _netManager?.PollEvents();
             AsClient?.Update();
 
+            UpdateRestartClientDrop();
             UpdateShutdownRetry();
+            UpdateRecoveryHint();
 
             if (ConnectingToServer == null && ConnectToServers != null && ConnectToServers.Count > 0)
             {
@@ -533,6 +815,15 @@ namespace SiteLink.API.Networking
             IsRestarting = false;
             IsConnectedToSimulated = isSimulated;
 
+            // A recovery that ran while the player was away has no connection to log against
+            // and nothing to promote - this session is already the active one in its slot. The
+            // listener reattaches the client the next time it knocks.
+            if (_recoveryInPlace)
+            {
+                CompleteRecoveryInPlace();
+                return;
+            }
+
             SiteLinkLogger.Info(
                 isSimulated
                     ? $"{Connection.Tag} Connected to simulated server (f=yellow){Server.Name}(f=white)!"
@@ -553,6 +844,12 @@ namespace SiteLink.API.Networking
                 return;
             }
 
+            if (IsRecoveryRetry)
+            {
+                ResumeAfterRecovery();
+                return;
+            }
+
             Connection.Session?.Stats.RecordServerSwitch();
 
             SessionManager.Singleton.PromotePendingToActive(
@@ -563,10 +860,55 @@ namespace SiteLink.API.Networking
             Connection.AsServer.Reconnect();
         }
 
+        /// <summary>
+        /// Hands the client over to this session after a shutdown/restart recovery reconnect,
+        /// without telling the client anything.
+        /// <para>
+        /// Recovery does not reconnect the old session, it builds a new one and swaps it in,
+        /// so the normal server-switch path used to run here. That path sends a
+        /// <c>RoundRestartMessage</c> (and, via the replaced session, a disconnect RPC), which
+        /// threw the player out of the proxy for the six seconds it took to re-authenticate,
+        /// destroyed the recovery hint that was the whole point, and occasionally surfaced as
+        /// a bare kick. From the client's point of view nothing happened here: the same
+        /// connection is now relayed to a freshly restarted server, and the server's own
+        /// <c>SceneMessage</c> reloads the facility for it.
+        /// </para>
+        /// </summary>
+        private void ResumeAfterRecovery()
+        {
+            // Take ownership of the connection first. PromotePendingToActive disconnects the
+            // session it replaces, and that disconnect only fires while the connection still
+            // points at the old session.
+            AttachToConnection(Connection);
+            Connection.Session = this;
+
+            SessionManager.Singleton.PromotePendingToActive(
+                Connection.PreAuth.UserId,
+                this
+            );
+
+            // Promotion marks the connection as switching servers so that the expected client
+            // disconnect detaches instead of destroying the session. No disconnect is coming,
+            // and leaving the flag set would make a genuine quit leak the session.
+            Connection.IsSwitchingServers = false;
+
+            IsRecoveryRetry = false;
+        }
+
         private void OnConnected(NetPeer peer) => FinalizeConnection(ConnectingToServer, isSimulated: false);
 
         private void OnDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
         {
+            // A recovery reconnect that runs while the player is away at the door has nobody to
+            // inform and no fallback worth picking: every failure means the same thing, "the
+            // game server is not up yet". Running the normal disconnect logic here would tear
+            // the session down and take the player's seat with it.
+            if (_recoveryInPlace)
+            {
+                HandleRecoveryInPlaceFailure(disconnectInfo);
+                return;
+            }
+
             switch (disconnectInfo.Reason)
             {
                 default:
@@ -685,7 +1027,17 @@ namespace SiteLink.API.Networking
             _shutdownRetryAttemptsMade = 0;
             _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.RestartRetryInterval ?? 3f));
 
-            _recoveryInitialDelay = 10f;
+            // With a bridge attached we do not have to guess how long the restart takes: the
+            // bridge holds the retry back until the game server reports it is accepting
+            // connections again, so the initial wait only exists to avoid a pointless first
+            // attempt. Without one, fall back to the delay the game server announced, and to
+            // the old fixed ten seconds when it announced nothing useful.
+            _recoveryInitialDelay = restartingServer.HasFreshBridgeRoundState
+                ? 1f
+                : (restartDelay > 0.5f ? Math.Min(restartDelay, 30f) : 10f);
+
+            _recoveryServerBack = false;
+            _recoveryGiveUpAt = DateTime.UtcNow.AddSeconds(RecoveryMaxSeconds);
 
             _nextShutdownRetry = DateTime.UtcNow.AddSeconds(_recoveryInitialDelay);
             _shutdownWaitingMessage = TranslationManager.For(this).Recovery.RestartWaiting;
@@ -693,6 +1045,16 @@ namespace SiteLink.API.Networking
             _shutdownRetryFinished = false;
 
             ShowShutdownRetryStatus();
+
+            // The restart message is on its way to the client, and the client answers it by
+            // leaving. Without this the proxy reads that as "player quit" and tears the whole
+            // slot down, so the player comes back as a stranger and gets routed by priority
+            // instead of back to the server they were playing on.
+            Connection.IsSwitchingServers = true;
+            ReconnectDeadline = DateTime.UtcNow.AddSeconds(
+                Math.Max(0f, restartDelay) + RestartReconnectGraceSeconds
+            );
+            _restartDropClientAt = DateTime.UtcNow.AddSeconds(RestartClientDropDelaySeconds);
 
             SiteLinkLogger.Info(
                 $"{Connection.Tag} Server (f=yellow){restartingServer.Name}(f=white) is restarting; " +
@@ -717,7 +1079,27 @@ namespace SiteLink.API.Networking
 
             Connection?.AsServer.Hint(unreachableMessage, 8f);
 
-            if (fallbackServers.Length == 0 || Connection == null)
+            // Nobody to move anywhere: the player is still away and is being told to wait at
+            // the door. Letting the session expire frees their slot, so their next attempt is
+            // routed like a fresh join instead of being delayed forever by a recovery that has
+            // already given up.
+            if (Connection == null)
+            {
+                SiteLinkLogger.Info(
+                    $"Server (f=yellow){_shutdownRetryServer.Name}(f=white) did not recover while " +
+                    $"(f=yellow){UserId}(f=white) was reconnecting; releasing their session.",
+                    "Session"
+                );
+
+                _shutdownRetryServer = null;
+                IsRestarting = false;
+
+                AliveUntil = DateTime.UtcNow;
+                ReconnectDeadline = DateTime.MinValue;
+                return;
+            }
+
+            if (fallbackServers.Length == 0)
             {
                 Disconnect(unreachableMessage);
                 return;
@@ -784,6 +1166,8 @@ namespace SiteLink.API.Networking
             _shutdownUnreachableMessage = TranslationManager.For(this).Recovery.ShutdownUnreachable;
             _shutdownRetryFinished = false;
             _recoveryInitialDelay = (float)_shutdownRetryInterval.TotalSeconds;
+            _recoveryServerBack = false;
+            _recoveryGiveUpAt = DateTime.UtcNow.AddSeconds(RecoveryMaxSeconds);
         }
 
         private void ShowShutdownRetryStatus()
@@ -791,16 +1175,82 @@ namespace SiteLink.API.Networking
             if (_shutdownRetryServer == null || _shutdownRetryFinished)
                 return;
 
-            Connection?.AsServer.Hint(
-                FormatShutdownRetryMessage(_shutdownWaitingMessage),
-                Math.Max(3f, (float)_shutdownRetryInterval.TotalSeconds + 0.5f)
-            );
+            _nextRecoveryHint = DateTime.UtcNow.Add(RecoveryHintInterval);
+
+            string message = FormatShutdownRetryMessage(_shutdownWaitingMessage);
+
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            Connection?.AsServer.Hint(message, RecoveryHintDuration);
+        }
+
+        /// <summary>
+        /// Keeps the recovery message on screen for the whole outage.
+        /// <para>
+        /// Without this the player saw one hint, watched it fade, and then stared at a frozen
+        /// facility for the rest of the restart with no indication that anything was still
+        /// happening. Re-sending on a fixed cadence also means the countdown in the message
+        /// actually counts down.
+        /// </para>
+        /// </summary>
+        private void UpdateRecoveryHint()
+        {
+            if (_shutdownRetryServer == null || _shutdownRetryFinished)
+            {
+                _nextRecoveryHint = DateTime.MaxValue;
+                return;
+            }
+
+            if (_nextRecoveryHint > DateTime.UtcNow)
+                return;
+
+            ShowShutdownRetryStatus();
+        }
+
+        /// <summary>
+        /// Closes the client's connection shortly after a restart was announced to it.
+        /// <para>
+        /// On a vanilla server the restart message and the transport shutdown arrive together,
+        /// and it is the shutdown that actually sends the client to its reconnect screen -
+        /// the message on its own only tells it how long to wait. Behind a proxy nothing ever
+        /// closes that socket, so the client kept the connection, ignored its own countdown,
+        /// and sat on a facility that was no longer being simulated. Dropping it here is the
+        /// proxy standing in for the game server's socket, which is what makes the restart
+        /// look like a restart.
+        /// </para>
+        /// </summary>
+        private void UpdateRestartClientDrop()
+        {
+            if (_restartDropClientAt > DateTime.UtcNow)
+                return;
+
+            _restartDropClientAt = DateTime.MaxValue;
+
+            RemoteConnection connection = Connection;
+
+            if (connection == null)
+                return;
+
+            // If recovery already handed the client to a newer session, the player is back in
+            // the facility and dropping them now would be a kick with extra steps.
+            if (!ReferenceEquals(connection.Session, this))
+                return;
+
+            // Transport-level only. A disconnect reason would be rendered as an error over
+            // the restart screen the client is about to show, and the client is expected
+            // back: IsSwitchingServers keeps the session alive for it.
+            connection.Disconnect();
         }
 
         private void UpdateShutdownRetry()
         {
             if (_shutdownRetryServer == null || _shutdownRetryFinished || Status != SessionStatus.Connected)
                 return;
+
+            // The bridge is the only source that knows whether the game server is actually
+            // down or merely swapping scenes, so let it drive the schedule when it is there.
+            ApplyBridgeRecoverySignal();
 
             if (_nextShutdownRetry > DateTime.UtcNow)
                 return;
@@ -811,6 +1261,17 @@ namespace SiteLink.API.Networking
             if (_shutdownRetryAttemptsMade >= _shutdownRetryAttempts)
             {
                 TryFallbackServersAfterShutdown();
+                return;
+            }
+
+            // Most of a restart is spent with no client attached: the player is away on the
+            // game's own restart screen and is being sent away again at the listener until the
+            // game server is back. Reconnect this session in place instead of waiting for them,
+            // because if the proxy waits for the client while the client waits for the proxy,
+            // nobody ever comes back and the player is lost.
+            if (Connection == null)
+            {
+                RetryRecoveryInPlace();
                 return;
             }
 
@@ -825,6 +1286,10 @@ namespace SiteLink.API.Networking
                 _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
                 return;
             }
+
+            // The player never asked to change servers; they are being put back where they
+            // already were. Marking the retry keeps FinalizeConnection from kicking them.
+            retrySession.IsRecoveryRetry = true;
 
             _shutdownRetryAttemptsMade++;
             _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
@@ -852,9 +1317,144 @@ namespace SiteLink.API.Networking
             retrySession.OnBanned += _ => FinishImmediatelyAfterLastFailure();
         }
 
+        /// <summary>
+        /// Reconnects this session to the restarting game server with no client attached.
+        /// <para>
+        /// The attached recovery path builds a second session and swaps it in, which needs a
+        /// connection to hang it off. There is none while the player is away, so the session
+        /// reconnects itself instead: same slot, same session, new socket to the game server.
+        /// When the player knocks again the listener reattaches them, and the scene message the
+        /// proxy synthesises takes the place of the one the game server sent while nobody was
+        /// listening.
+        /// </para>
+        /// </summary>
+        private void RetryRecoveryInPlace()
+        {
+            Server target = _shutdownRetryServer;
+
+            if (target == null)
+                return;
+
+            _shutdownRetryAttemptsMade++;
+            _nextShutdownRetry = DateTime.UtcNow.Add(_shutdownRetryInterval);
+
+            _recoveryInPlace = true;
+
+            ConnectingToServer = target;
+            Status = SessionStatus.Connecting;
+
+            SiteLinkLogger.Debug(
+                $"Reconnecting (f=yellow){UserId}(f=white) to (f=yellow){target.Name}(f=white) while the player waits " +
+                $"(attempt (f=yellow){_shutdownRetryAttemptsMade}(f=white)/(f=yellow){_shutdownRetryAttempts}(f=white)).",
+                "Session"
+            );
+
+            Connect();
+        }
+
+        /// <summary>
+        /// Finishes a recovery that ran without a client: the session is back on a real game
+        /// server and the player's next connection attempt is allowed through.
+        /// </summary>
+        private void CompleteRecoveryInPlace()
+        {
+            _recoveryInPlace = false;
+            _shutdownRetryFinished = true;
+            _shutdownRetryServer = null;
+            _nextShutdownRetry = DateTime.MaxValue;
+            _nextRecoveryHint = DateTime.MaxValue;
+            _restartDropClientAt = DateTime.MaxValue;
+            IsRecoveryRetry = false;
+
+            SiteLinkLogger.Info(
+                $"Reconnected (f=yellow){UserId}(f=white) to (f=yellow){Server?.Name}(f=white) after its restart; " +
+                $"letting the player back in.",
+                "Session"
+            );
+
+            RemoteConnection connection = Connection;
+
+            // The client can slip back in during the last moments of the reconnect. It is then
+            // sitting on its own loading screen with nothing to load, so it needs the same
+            // handover a reattach would have given it.
+            if (connection == null || !ReferenceEquals(connection.Session, this))
+                return;
+
+            connection.AsServer.Scene("Facility");
+
+            if (Server?.IsSimulated == false)
+                connection.AsServer.Seed(MapSeed);
+        }
+
+        /// <summary>
+        /// Reschedules a failed detached recovery attempt. The session stays alive and keeps
+        /// reporting as connected, which is what keeps the player's seat - and the recovery
+        /// loop - from being thrown away because a game server is a few seconds late.
+        /// </summary>
+        private void HandleRecoveryInPlaceFailure(DisconnectInfo disconnectInfo)
+        {
+            double retryIn = _shutdownRetryInterval.TotalSeconds;
+
+            if (disconnectInfo.Reason == DisconnectReason.ConnectionRejected &&
+                disconnectInfo.AdditionalData.RawData != null &&
+                disconnectInfo.AdditionalData.TryGetByte(out byte rawReason))
+            {
+                RejectionReason reason = (RejectionReason)rawReason;
+
+                switch (reason)
+                {
+                    // Answering the security challenge is part of connecting, not a failure.
+                    case RejectionReason.Challenge:
+                        Challenge.ProcessChallenge(disconnectInfo.AdditionalData);
+                        return;
+
+                    // The game server is up but still delaying preauth. It just told us for
+                    // exactly how long, so there is no reason to guess.
+                    case RejectionReason.Delay:
+                        if (disconnectInfo.AdditionalData.TryGetByte(out byte offset))
+                            retryIn = Math.Max(1, (int)offset);
+                        break;
+                }
+
+                SiteLinkLogger.Debug(
+                    $"Restart recovery for (f=yellow){UserId}(f=white) was rejected by " +
+                    $"(f=yellow){ConnectingToServer?.Name}(f=white) ((f=red){reason}(f=white)); " +
+                    $"retrying in (f=yellow){retryIn:0.##}(f=white) second(s).",
+                    "Session"
+                );
+            }
+            else
+            {
+                SiteLinkLogger.Debug(
+                    $"Restart recovery for (f=yellow){UserId}(f=white) could not reach " +
+                    $"(f=yellow){ConnectingToServer?.Name}(f=white) ((f=red){disconnectInfo.Reason}(f=white)); " +
+                    $"retrying in (f=yellow){retryIn:0.##}(f=white) second(s).",
+                    "Session"
+                );
+            }
+
+            _recoveryInPlace = false;
+
+            // ConnectingToServer deliberately keeps pointing at the restarting server. Clearing
+            // it would let Update() dequeue the next priority server and quietly move the player
+            // somewhere else, which is not what a restart recovery is for.
+            //
+            // Status has to read Connected again or UpdateShutdownRetry never looks at this
+            // session again.
+            Status = SessionStatus.Connected;
+            _nextShutdownRetry = DateTime.UtcNow.AddSeconds(retryIn);
+
+            DestroyNet();
+        }
+
         private string FormatShutdownRetryMessage(string message)
         {
             message ??= string.Empty;
+
+            // Seconds left until the next reconnect attempt. This is what makes the message
+            // read as progress rather than as a stuck screen: a static "waiting..." is
+            // indistinguishable from a crash from the player's side.
+            double countdown = Math.Max(0d, (_nextShutdownRetry - DateTime.UtcNow).TotalSeconds);
 
             return TranslationManager.Format(
                     message,
@@ -862,10 +1462,72 @@ namespace SiteLink.API.Networking
                 .Add("server", _shutdownRetryServer?.DisplayName)
                 .Add("server_name", _shutdownRetryServer?.Name)
                 .Add("attempts", _shutdownRetryAttempts)
+                .Add("attempt", Math.Min(_shutdownRetryAttemptsMade + 1, Math.Max(1, _shutdownRetryAttempts)))
                 .Add("interval", _shutdownRetryInterval.TotalSeconds, "0.##")
                 .Add("restart_delay", _recoveryInitialDelay, "0.##")
+                .Add("countdown", countdown, "0")
                 .Format();
         }
+
+        /// <summary>
+        /// Lets the bridge, rather than a fixed timer, decide when the game server is worth
+        /// reconnecting to.
+        /// <para>
+        /// Without a bridge the proxy can only guess: it waits ten seconds, then retries on a
+        /// fixed interval and burns its attempt budget against a server that is still loading
+        /// a scene. The bridge reports both the round state and whether the transport is
+        /// still delaying incoming connections, which is exactly the question the retry loop
+        /// is trying to answer.
+        /// </para>
+        /// </summary>
+        private void ApplyBridgeRecoverySignal()
+        {
+            Server server = _shutdownRetryServer;
+
+            if (server == null || !server.HasFreshBridgeRoundState)
+                return;
+
+            if (server.IsBridgeBusyRestarting)
+            {
+                _recoveryServerBack = false;
+
+                // Do not spend an attempt on a server that has told us it is not ready. Keep
+                // the next check just past the point where the bridge would have to have
+                // reported again for us to still trust it.
+                DateTime hold = DateTime.UtcNow.Add(_shutdownRetryInterval);
+
+                if (_nextShutdownRetry < hold)
+                    _nextShutdownRetry = hold;
+
+                return;
+            }
+
+            if (!server.BridgeAcceptingConnections)
+            {
+                _recoveryServerBack = false;
+
+                // The transport is up but still delaying preauth. Connecting now earns a
+                // rejection and a wasted attempt; wait out the delay the server declared.
+                DateTime hold = DateTime.UtcNow.AddSeconds(Math.Max(1, server.BridgeConnectionDelaySeconds));
+
+                if (_nextShutdownRetry < hold)
+                    _nextShutdownRetry = hold;
+
+                return;
+            }
+
+            if (_recoveryServerBack)
+                return;
+
+            // First tick where the bridge says the server is live and accepting. Stop waiting.
+            _recoveryServerBack = true;
+            _nextShutdownRetry = DateTime.UtcNow;
+
+            SiteLinkLogger.Info(
+                $"{Connection?.Tag} Bridge reports (f=yellow){server.Name}(f=white) is accepting connections again; reconnecting now."
+            );
+        }
+
 
         internal void ShowConnectionDelayedStatus(Server server, byte delay)
         {

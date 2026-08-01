@@ -27,6 +27,22 @@ public class ListenersService : BackgroundService
             {
                 new Listener(settings.Name);
             }
+
+            // One endpoint for every bridge: they identify their game server with a secret
+            // key, so the number of game servers does not change the number of ports.
+            BridgeListenerSettings bridgeSettings = SiteLinkSettings.Singleton.Bridge;
+
+            if (bridgeSettings is { Enabled: true })
+            {
+                if (SiteLinkSettings.Singleton.Listeners.Any(x => x.ListenPort == bridgeSettings.ListenPort))
+                {
+                    SiteLinkLogger.Error($"Bridge listener port {bridgeSettings.ListenPort} is already used by a game client listener, bridge endpoint not started.", "Listener");
+                }
+                else
+                {
+                    new Listener(bridgeSettings);
+                }
+            }
         }
         catch (Exception ex)
         {

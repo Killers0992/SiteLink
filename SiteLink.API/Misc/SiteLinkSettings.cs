@@ -109,6 +109,13 @@ public class SiteLinkSettings
     };
 
     /// <summary>
+    /// The single endpoint every bridge plugin connects to. Bridges are matched to their game
+    /// server by secret key, so one endpoint serves every server.
+    /// </summary>
+    [Description("Dedicated endpoint every bridge plugin connects to, regardless of the number of game servers.")]
+    public BridgeListenerSettings Bridge { get; set; } = new BridgeListenerSettings();
+
+    /// <summary>
     /// The list of backend servers managed by SiteLink.
     /// These entries define connection targets and display names for each proxied server.
     /// </summary>

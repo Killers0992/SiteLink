@@ -28,6 +28,15 @@ namespace UserSettings.ServerSpecific
 			ContentType = contentType;
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteString (DefaultText);
+			writer.WriteString (Placeholder);
+			writer.WriteUShort ((ushort)CharacterLimit);
+			writer.WriteByte ((byte)ContentType);
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 			SyncInputText = (base.IsServerOnly ? DefaultText : string.Empty);

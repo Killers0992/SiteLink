@@ -35,6 +35,7 @@ public class ScpServerListHandler : IDisposable
     private bool _initialized;
     private bool _scheduleTokenRefresh;
     private bool _verifyNotice;
+    private bool _bridgeCountFallbackNotice;
     private byte _cycle;
 
     public ScpServerListHandler(CancellationToken cancellationToken)
@@ -250,7 +251,29 @@ public class ScpServerListHandler : IDisposable
                 }
                 else
                 {
-                    playersStr = $"{targetServer.SessionsCount}/{targetServer.MaxSessions}";
+                    // Rule 5.6 of the CSG requires the reported player count to be accurate.
+                    // The proxy's own session count is not: with more than one proxy in front
+                    // of the same game server each proxy only sees its own slice. When the
+                    // bridge plugin is reporting, its number is the only correct one.
+                    if (targetServer.HasFreshBridgePlayerCount)
+                    {
+                        int maxPlayers = targetServer.BridgeMaxPlayers > 0
+                            ? targetServer.BridgeMaxPlayers
+                            : targetServer.MaxSessions;
+
+                        playersStr = $"{targetServer.BridgePlayerCount}/{maxPlayers}";
+                        _bridgeCountFallbackNotice = false;
+                    }
+                    else
+                    {
+                        if (targetServer.Settings.Bridge.Enabled && !_bridgeCountFallbackNotice)
+                        {
+                            _bridgeCountFallbackNotice = true;
+                            SiteLinkLogger.Warn($"{listener.Tag} Bridge player count from server '{listener.Settings.ServerList.TakePlayerCountFromServer}' is unavailable, falling back to proxy session count. Reported numbers may be inaccurate while more than one proxy is in use.");
+                        }
+
+                        playersStr = $"{targetServer.SessionsCount}/{targetServer.MaxSessions}";
+                    }
                 }
             }
 

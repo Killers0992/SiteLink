@@ -67,18 +67,18 @@ public class ConnectionTranslations
 
 public class RecoveryTranslations
 {
-    [Description("Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}")]
+    [Description("Placeholders: {server}, {server_name}, {attempts}, {attempt}, {interval}, {restart_delay}, {countdown}")]
     public string ShutdownWaiting { get; set; } =
-        "{tag}\nServer {server} shut down, waiting for it to be online...";
+        "{tag}\n<b>Server {server} went offline.</b>\nReconnecting in {countdown}s... (attempt {attempt}/{attempts})";
 
-    [Description("Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}")]
+    [Description("Placeholders: {server}, {server_name}, {attempts}, {attempt}, {interval}, {restart_delay}, {countdown}")]
     public string ShutdownUnreachable { get; set; } = "{tag}\nServer {server} is not reachable!";
 
-    [Description("Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}")]
+    [Description("Placeholders: {server}, {server_name}, {attempts}, {attempt}, {interval}, {restart_delay}, {countdown}")]
     public string RestartWaiting { get; set; } =
-        "{tag}\nServer {server} is restarting, reconnecting in {restart_delay} seconds...";
+        "{tag}\n<b>Server {server} is restarting.</b>\nDo not leave - you will be reconnected automatically.\nReconnecting in {countdown}s...";
 
-    [Description("Placeholders: {server}, {server_name}, {attempts}, {interval}, {restart_delay}")]
+    [Description("Placeholders: {server}, {server_name}, {attempts}, {attempt}, {interval}, {restart_delay}, {countdown}")]
     public string RestartUnreachable { get; set; } =
         "{tag}\nServer {server} did not come back online!";
 }

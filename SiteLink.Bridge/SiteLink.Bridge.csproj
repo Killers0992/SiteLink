@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net48</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<AssemblyName>SiteLink.Bridge</AssemblyName>
+		<RootNamespace>SiteLink.Bridge</RootNamespace>
+		<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+		<AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+
+		<!-- The plugin is loaded by LabAPI next to the game's own assemblies. Copying
+		     anything besides SiteLink.Bridge.dll into the plugins folder would shadow
+		     assemblies the game already has loaded. -->
+		<CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<Title>SiteLink.Bridge</Title>
+		<Description>LabAPI plugin that connects a SCP: Secret Laboratory game server to a SiteLink proxy.</Description>
+		<Authors>Killers0992</Authors>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+		<PackageReference Include="Northwood.LabAPI" Version="1.1.7" ExcludeAssets="runtime" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="Assembly-CSharp">
+			<HintPath>$(SL_REFERENCES)\Assembly-CSharp.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+
+		<Reference Include="CommandSystem.Core">
+			<HintPath>$(SL_REFERENCES)\CommandSystem.Core.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+
+		<Reference Include="Mirror">
+			<HintPath>$(SL_REFERENCES)\Mirror.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+
+		<Reference Include="UnityEngine.CoreModule">
+			<HintPath>$(UNITY_REFERENCES)\UnityEngine.CoreModule.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- SiteLink.API ships separately in LabAPI/dependencies/global, so it must not be
+		     copied next to the plugin. -->
+		<ProjectReference Include="..\SiteLink.API\SiteLink.API.csproj" Private="false" ReferenceOutputAssembly="true" />
+	</ItemGroup>
+
+	<!-- See SiteLink.API.csproj: the reference assemblies package injects its own
+	     mscorlib item, and LiteNetLib's signatures need the game's corlib. -->
+	<Target Name="UseGameCorlib" BeforeTargets="ResolveAssemblyReferences">
+		<Error Text="mscorlib.dll was not found in SL_REFERENCES ('$(SL_REFERENCES)')." Condition="!Exists('$(SL_REFERENCES)\mscorlib.dll')" />
+		<ItemGroup>
+			<Reference Remove="mscorlib" />
+			<Reference Include="$(SL_REFERENCES)\mscorlib.dll">
+				<Private>False</Private>
+			</Reference>
+		</ItemGroup>
+	</Target>
+
+</Project>

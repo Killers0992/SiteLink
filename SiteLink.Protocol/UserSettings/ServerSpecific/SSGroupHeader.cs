@@ -19,6 +19,12 @@ namespace UserSettings.ServerSpecific
 			ReducedPadding = reducedPadding;
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteBool (ReducedPadding);
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 		}

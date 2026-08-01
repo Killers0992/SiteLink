@@ -162,8 +162,8 @@ namespace SiteLink.API.Misc
 
             foreach (var seg in kept)
             {
-                // Write length prefix (varuint)
-                WriteVarUInt(dst, ref p, (uint)seg.Count);
+                // Write length prefix (Mirror's variable-length encoding)
+                WriteVarUInt(dst, ref p, (ulong)seg.Count);
 
                 // Copy message bytes
                 Buffer.BlockCopy(seg.Array!, seg.Offset, dst, p, seg.Count);
@@ -174,14 +174,85 @@ namespace SiteLink.API.Misc
             return true;
         }
 
-        private static void WriteVarUInt(byte[] buffer, ref int pos, uint value)
+        /// <summary>
+        /// Writes a length prefix in Mirror's variable-length encoding.
+        /// <para>
+        /// This is deliberately not LEB128. Mirror uses the SQLite4 style scheme, where
+        /// anything up to 240 fits in a single byte and the ranges above it are keyed off a
+        /// marker byte. An LEB128 encoder agrees with it only for values below 128, so it
+        /// silently produced correct batches until a rewritten message first grew past that -
+        /// then the client read the length prefix as one byte, treated the continuation byte
+        /// as message data, and every message after it in the batch was shifted by one. Mirror
+        /// throws on the garbage and closes the connection with no kick reason, which is
+        /// exactly what appending the server selector to the settings pack triggered.
+        /// </para>
+        /// <para>
+        /// Kept byte-for-byte identical to <c>Mirror.Compression.CompressVarUInt</c>; the
+        /// round-trip against Mirror's own decoder is covered by a test.
+        /// </para>
+        /// </summary>
+        internal static void WriteVarUInt(byte[] buffer, ref int pos, ulong value)
         {
-            while (value >= 0x80)
+            if (value <= 240)
             {
-                buffer[pos++] = (byte)(value | 0x80);
-                value >>= 7;
+                buffer[pos++] = (byte)value;
             }
+            else if (value <= 2287)
+            {
+                buffer[pos++] = (byte)(((value - 240) >> 8) + 241);
+                buffer[pos++] = (byte)((value - 240) & 0xFF);
+            }
+            else if (value <= 67823)
+            {
+                buffer[pos++] = 249;
+                buffer[pos++] = (byte)((value - 2288) >> 8);
+                buffer[pos++] = (byte)((value - 2288) & 0xFF);
+            }
+            else if (value <= 16777215)
+            {
+                buffer[pos++] = 250;
+                buffer[pos++] = (byte)value;
+                buffer[pos++] = (byte)(value >> 8);
+                buffer[pos++] = (byte)(value >> 16);
+            }
+            else if (value <= uint.MaxValue)
+            {
+                buffer[pos++] = 251;
+                WriteUInt32(buffer, ref pos, (uint)value);
+            }
+            else if (value <= 1099511627775UL)
+            {
+                buffer[pos++] = 252;
+                buffer[pos++] = (byte)value;
+                WriteUInt32(buffer, ref pos, (uint)(value >> 8));
+            }
+            else if (value <= 281474976710655UL)
+            {
+                buffer[pos++] = 253;
+                buffer[pos++] = (byte)value;
+                buffer[pos++] = (byte)(value >> 8);
+                WriteUInt32(buffer, ref pos, (uint)(value >> 16));
+            }
+            else if (value <= 72057594037927935UL)
+            {
+                buffer[pos++] = 254;
+                for (int i = 0; i < 7; i++)
+                    buffer[pos++] = (byte)(value >> (i * 8));
+            }
+            else
+            {
+                buffer[pos++] = byte.MaxValue;
+                for (int i = 0; i < 8; i++)
+                    buffer[pos++] = (byte)(value >> (i * 8));
+            }
+        }
+
+        private static void WriteUInt32(byte[] buffer, ref int pos, uint value)
+        {
             buffer[pos++] = (byte)value;
+            buffer[pos++] = (byte)(value >> 8);
+            buffer[pos++] = (byte)(value >> 16);
+            buffer[pos++] = (byte)(value >> 24);
         }
 
 

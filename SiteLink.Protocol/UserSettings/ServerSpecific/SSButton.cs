@@ -22,6 +22,13 @@ namespace UserSettings.ServerSpecific
 			HoldTimeSeconds = Mathf.Max (holdTimeSeconds.GetValueOrDefault (), 0f);
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteFloat (HoldTimeSeconds);
+			writer.WriteString (ButtonText);
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 			SyncLastPress.Reset ();

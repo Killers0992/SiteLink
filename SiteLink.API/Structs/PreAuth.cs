@@ -116,18 +116,37 @@ public struct PreAuth
             case ClientType.Bridge:
                 if (!reader.TryGetString(out string secretKey))
                 {
+                    SiteLinkLogger.Warn($"Bridge from {connectionIp} rejected, the handshake carried no secret key.", "Bridge");
+
                     rejectForce = true;
                     response = DisconnectType.ForbiddenClientType;
                     return false;
                 }
 
+                // Settings is null for servers a plugin registered without a settings.yml
+                // entry, and those must not take the whole lookup down with them.
                 Server targetServer = Server.RegisteredServers.Values
                     .FirstOrDefault(x =>
-                        x.Settings.Bridge.Enabled &&
-                        x.Settings.Bridge.SecretKey == secretKey);
+                        x.Settings?.Bridge is { Enabled: true } bridge &&
+                        bridge.SecretKey == secretKey);
 
                 if (targetServer == null)
                 {
+                    // Servers are registered twice - once by name, once by address - so the
+                    // list has to be deduplicated before it is shown to anyone.
+                    string[] candidates = Server.RegisteredServers.Values
+                        .Distinct()
+                        .Where(x => x.Settings?.Bridge?.Enabled == true)
+                        .Select(x => $"{x.Name} (key length {x.Settings.Bridge.SecretKey?.Length ?? 0})")
+                        .ToArray();
+
+                    // The game server only ever sees "ConnectionRejected", so the reason has
+                    // to be on this side. Key lengths instead of keys: enough to spot a typo,
+                    // a stray space or a quoting accident without printing the secret.
+                    SiteLinkLogger.Warn(candidates.Length == 0
+                        ? $"Bridge from {connectionIp} rejected, no server in settings.yml has 'bridge.enabled: true'."
+                        : $"Bridge from {connectionIp} rejected, its secret key (length {secretKey.Length}) matches no server with the bridge enabled: {string.Join(", ", candidates)}.", "Bridge");
+
                     rejectForce = true;
                     response = DisconnectType.ForbiddenClientType;
                     return false;

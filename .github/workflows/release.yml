@@ -19,6 +19,9 @@ env:
 
   PROJECT_PATH: "SiteLink/SiteLink.csproj"
 
+  BRIDGE_PROJECT_PATH: "SiteLink.Bridge/SiteLink.Bridge.csproj"
+  API_PROJECT_PATH: "SiteLink.API/SiteLink.API.csproj"
+
   ASSEMBLY_NAME: "SiteLink"
 
   WINDOWS_RUNTIME: "win-x64"
@@ -26,6 +29,9 @@ env:
 
   WINDOWS_OUTPUT: "${{ github.workspace }}/publish/win-x64"
   LINUX_OUTPUT: "${{ github.workspace }}/publish/linux-x64"
+
+  BRIDGE_OUTPUT: "${{ github.workspace }}/publish/bridge"
+  DEPENDENCIES_OUTPUT: "${{ github.workspace }}/publish/dependencies"
 
   SL_REFERENCES: "${{ github.workspace }}/References"
   UNITY_REFERENCES: "${{ github.workspace }}/References"
@@ -48,7 +54,7 @@ jobs:
         uses: killers0992/scpsl.downloadfiles@master
         with:
           branch: "public"
-          filesToDownload: "BouncyCastle.Cryptography.dll,UnityEngine.CoreModule.dll,Mirror.dll,Assembly-CSharp.dll,Unity.TextMeshPro.dll"
+          filesToDownload: "BouncyCastle.Cryptography.dll,UnityEngine.CoreModule.dll,Mirror.dll,Assembly-CSharp.dll,Unity.TextMeshPro.dll,CommandSystem.Core.dll,mscorlib.dll"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -120,6 +126,59 @@ jobs:
             -p:DebugType=None \
             -p:DebugSymbols=false
 
+      - name: Build game server bridge assemblies
+        run: |
+          dotnet build "${{ env.API_PROJECT_PATH }}" \
+            --configuration Release \
+            --framework net48 \
+            -p:Version="${{ steps.version.outputs.version }}" \
+            -p:GeneratePackageOnBuild=false \
+            -p:DebugType=None \
+            -p:DebugSymbols=false
+
+          dotnet build "${{ env.BRIDGE_PROJECT_PATH }}" \
+            --configuration Release \
+            --framework net48 \
+            -p:Version="${{ steps.version.outputs.version }}" \
+            -p:DebugType=None \
+            -p:DebugSymbols=false
+
+      - name: Package game server bridge assets
+        shell: bash
+        run: |
+          API_DLL="SiteLink.API/bin/Release/net48/SiteLink.API.dll"
+          BRIDGE_DLL="SiteLink.Bridge/bin/Release/net48/SiteLink.Bridge.dll"
+
+          if [[ ! -f "$API_DLL" ]]; then
+            echo "::error::net48 SiteLink.API.dll was not found at: $API_DLL"
+            find SiteLink.API/bin -type f -name "*.dll" -print || true
+            exit 1
+          fi
+
+          if [[ ! -f "$BRIDGE_DLL" ]]; then
+            echo "::error::SiteLink.Bridge.dll was not found at: $BRIDGE_DLL"
+            find SiteLink.Bridge/bin -type f -name "*.dll" -print || true
+            exit 1
+          fi
+
+          mkdir -p "${{ env.DEPENDENCIES_OUTPUT }}" "${{ env.BRIDGE_OUTPUT }}"
+
+          # dependencies.zip is extracted straight into LabAPI/dependencies/global, so it
+          # must contain nothing but the assembly the plugin needs.
+          cp "$API_DLL" "${{ env.DEPENDENCIES_OUTPUT }}/SiteLink.API.dll"
+          cp "$BRIDGE_DLL" "${{ env.BRIDGE_OUTPUT }}/SiteLink.Bridge.dll"
+
+          DEPENDENCIES_FILE="${{ github.workspace }}/publish/dependencies.zip"
+          rm -f "$DEPENDENCIES_FILE"
+          (cd "${{ env.DEPENDENCIES_OUTPUT }}" && zip -q -X "$DEPENDENCIES_FILE" SiteLink.API.dll)
+
+          echo "BRIDGE_FILE=${{ env.BRIDGE_OUTPUT }}/SiteLink.Bridge.dll" >> "$GITHUB_ENV"
+          echo "DEPENDENCIES_FILE=$DEPENDENCIES_FILE" >> "$GITHUB_ENV"
+
+          echo "Bridge plugin:  ${{ env.BRIDGE_OUTPUT }}/SiteLink.Bridge.dll"
+          echo "Dependencies:   $DEPENDENCIES_FILE"
+          unzip -l "$DEPENDENCIES_FILE"
+
       - name: Verify published applications
         shell: bash
         run: |
@@ -160,6 +219,20 @@ jobs:
           path: ${{ env.LINUX_FILE }}
           if-no-files-found: error
 
+      - name: Upload bridge plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiteLink.Bridge
+          path: ${{ env.BRIDGE_FILE }}
+          if-no-files-found: error
+
+      - name: Upload bridge dependencies artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiteLink-dependencies
+          path: ${{ env.DEPENDENCIES_FILE }}
+          if-no-files-found: error
+
       - name: Create GitHub release
         shell: bash
         env:
@@ -171,6 +244,8 @@ jobs:
             "$TAG"
             "$WINDOWS_FILE#SiteLink.exe"
             "$LINUX_FILE#SiteLink"
+            "$BRIDGE_FILE#SiteLink.Bridge.dll"
+            "$DEPENDENCIES_FILE#dependencies.zip"
             --repo "$GITHUB_REPOSITORY"
             --target "$GITHUB_SHA"
             --title "SiteLink $TAG"

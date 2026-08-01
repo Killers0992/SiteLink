@@ -28,6 +28,13 @@ namespace UserSettings.ServerSpecific
 			AlignmentOptions = textAlignment;
 		}
 
+		public override void SerializeEntry (NetworkWriter writer)
+		{
+			base.SerializeEntry (writer);
+			writer.WriteByte ((byte)Foldout);
+			writer.WriteInt ((int)AlignmentOptions);
+		}
+
 		public override void ApplyDefaultValues ()
 		{
 		}

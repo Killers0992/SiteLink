@@ -17,6 +17,11 @@
 
         public override void Disconnected()
         {
+            // Only clear the back-reference when it still points at us: a bridge that
+            // reconnects before the old connection is torn down has already replaced it.
+            if (TargetServer != null && ReferenceEquals(TargetServer.BridgeConnection, this))
+                TargetServer.BridgeConnection = null;
+
             SiteLinkBridge.DetachServerPeer(TargetServer, new DisconnectInfo());
         }
     }
