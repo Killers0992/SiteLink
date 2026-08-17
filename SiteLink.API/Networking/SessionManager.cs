@@ -111,18 +111,38 @@ namespace SiteLink.API.Networking
                 return;
             }
 
-            // Expired => destroy (pending should not affect active)
             if (isPending)
             {
-                SiteLinkLogger.Info($"Pending session for user (f=yellow){userId}(f=white) expired. Destroying pending session.");
-                SafeKill(session, "Pending session expired");
-                if (slot.Pending == session) slot.Pending = null;
+                SiteLinkLogger.Info(
+                    $"Pending session for user (f=yellow){userId}(f=white) expired. Destroying pending session.");
+
+                RemoteConnection connection = session.Connection;
+
+                bool isInitialConnection =
+                    slot.Active == null;
+
+                if (slot.Pending == session)
+                    slot.Pending = null;
+
+                DisposeSession(session);
+
+                if (isInitialConnection && connection != null)
+                {
+                    SiteLinkLogger.Info(
+                        $"Destroying expired bootstrap connection for user " +
+                        $"(f=yellow){userId}(f=white).");
+
+                    connection.AbortBootstrap();
+                }
             }
             else
             {
                 SiteLinkLogger.Info($"Active session for user (f=yellow){userId}(f=white) expired (no proxy reconnect). Destroying active session.");
+
                 SafeKill(session, "Active session expired");
-                if (slot.Active == session) slot.Active = null;
+
+                if (slot.Active == session)
+                    slot.Active = null;
             }
         }
 
@@ -355,16 +375,27 @@ namespace SiteLink.API.Networking
         {
             session.OnServerFull += resp =>
             {
-                // final means no more servers to try
-                if (!resp.IsFinalResponse) return;
+                if (!resp.IsFinalResponse)
+                    return;
+
+                string userId =
+                    connection.PreAuth.UserId;
+
+                bool detached =
+                    DetachPendingSession(
+                        userId,
+                        session);
 
                 ClientConnectionResponseEvent ev =
-                    new ClientConnectionResponseEvent(
+                    new(
                         connection,
                         resp.Server,
                         new ServerIsFullResponse());
 
                 EventManager.Client.InvokeConnectionResponse(ev);
+
+                if (detached)
+                    DisposeSession(session);
 
                 if (ev.IsCancelled)
                     return;
@@ -375,25 +406,25 @@ namespace SiteLink.API.Networking
                     {
                         connection.AsServer.Hint(
                             FormatServerMessage(
-                                TranslationManager.For(session).Connection.ServerFullHint,
+                                TranslationManager
+                                    .For(session)
+                                    .Connection
+                                    .ServerFullHint,
                                 resp.Server,
                                 session),
                             3f);
                     }
 
-                    FailPending(
-                        connection.PreAuth.UserId,
-                        session,
-                        "full");
-
                     return;
                 }
 
-                // ACTIVE first join: reject if still pending, otherwise disconnect
                 RejectOrDisconnect(
                     connection,
                     FormatServerMessage(
-                        TranslationManager.For(session).Connection.ServerFullDisconnect,
+                        TranslationManager
+                            .For(session)
+                            .Connection
+                            .ServerFullDisconnect,
                         resp.Server,
                         session));
             };
@@ -459,6 +490,26 @@ namespace SiteLink.API.Networking
             };
         }
 
+        public bool OwnsConnection(RemoteConnection connection)
+        {
+            if (connection == null)
+                return false;
+
+            string userId = connection.PreAuth.UserId;
+
+            if (!Slots.TryGetValue(userId, out SessionSlot slot))
+                return false;
+
+            lock (slot)
+            {
+                if (!IsCurrentSlot(userId, slot))
+                    return false;
+
+                return ReferenceEquals(slot.Active?.Connection, connection) ||
+                       ReferenceEquals(slot.Pending?.Connection, connection);
+            }
+        }
+
         private void RejectOrDisconnect(Connection connection, string reason)
         {
             connection.Disconnect(reason);
@@ -506,6 +557,35 @@ namespace SiteLink.API.Networking
                 if (!ReferenceEquals(active, pending))
                     SafeKill(active, reason);
                 return;
+            }
+        }
+
+        private bool DetachPendingSession(
+            string userId,
+            Session session)
+        {
+            if (!Slots.TryGetValue(
+                    userId,
+                    out SessionSlot slot))
+            {
+                return false;
+            }
+
+            lock (slot)
+            {
+                if (!IsCurrentSlot(userId, slot))
+                    return false;
+
+                if (!ReferenceEquals(
+                        slot.Pending,
+                        session))
+                {
+                    return false;
+                }
+
+                slot.Pending = null;
+
+                return true;
             }
         }
     }

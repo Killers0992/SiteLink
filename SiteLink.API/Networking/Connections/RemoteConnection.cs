@@ -9,7 +9,8 @@ public class RemoteConnection : Connection
         SessionRpc
     }
 
-    public static Dictionary<string, RemoteConnection> ConnectionByUserId = new Dictionary<string, RemoteConnection>();
+    public static ConcurrentDictionary<string, RemoteConnection> ConnectionByUserId = new ConcurrentDictionary<string, RemoteConnection>();
+    private int _disconnectHandled;
 
     public static bool TryGet(string userId, out RemoteConnection connection) => ConnectionByUserId.TryGetValue(userId, out connection);
 
@@ -28,6 +29,8 @@ public class RemoteConnection : Connection
     /// </summary>
     public bool IsSwitchingServers { get; set; }
 
+    public bool IsBootstrapConnection => Request != null && Peer == null;
+
     public RemoteConnection(Listener listener, ConnectionRequest request, PreAuth preAuth) : base(listener, request, preAuth)
     {
         AsServer = new MirrorSender(this,
@@ -38,7 +41,7 @@ public class RemoteConnection : Connection
                 SendToConnection(bytes, offset, length, method);
             });
 
-        ConnectionByUserId.Add(PreAuth.UserId, this);
+        ConnectionByUserId[PreAuth.UserId] = this;
     }
 
     /// <summary>
@@ -191,11 +194,41 @@ public class RemoteConnection : Connection
 
     public override void Disconnected()
     {
-        if (IsSwitchingServers)
-            SessionManager.Singleton.DetachClient(PreAuth.UserId, "switching servers");
-        else
-            SessionManager.Singleton.DestroyAllForUser(PreAuth.UserId, "Client disconnected from proxy");
+        if (Interlocked.Exchange(ref _disconnectHandled, 1) != 0)
+            return;
 
-        ConnectionByUserId.Remove(PreAuth.UserId);
+        if (IsSwitchingServers)
+        {
+            SessionManager.Singleton.DetachClient(
+                PreAuth.UserId,
+                "switching servers");
+        }
+        else
+        {
+            SessionManager.Singleton.DestroyAllForUser(
+                PreAuth.UserId,
+                "Client disconnected from proxy");
+        }
+
+        ((ICollection<KeyValuePair<string, RemoteConnection>>)
+            ConnectionByUserId)
+            .Remove(
+                new KeyValuePair<string, RemoteConnection>(
+                    PreAuth.UserId,
+                    this));
+    }
+
+    internal void AbortBootstrap()
+    {
+        if (IsDisposed)
+            return;
+
+        if (Request != null)
+        {
+            base.Disconnect();
+            return;
+        }
+
+        Peer?.Disconnect();
     }
 }

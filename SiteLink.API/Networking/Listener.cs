@@ -274,7 +274,7 @@ public class Listener : IDisposable
 
         code.ByteToBools(out bool b1, out bool b2, out bool b3, out bool b4, out bool b5, out session.HasFpcMouseLook, out session.HasFpcPosition, out session.HasFpcCustomData);
 
-        session.MovementState = (PlayerMovementState) Extensions.BoolsToByte(b1, b2, b3, b4, b5, false, false, false);
+        session.MovementState = (PlayerMovementState)Extensions.BoolsToByte(b1, b2, b3, b4, b5, false, false, false);
 
         if (session.HasFpcPosition)
             session.RelativePosition = r.ReadRelativePosition();
@@ -508,12 +508,25 @@ public class Listener : IDisposable
 
             case ClientType.GameClient:
 
-                if (RemoteConnection.ConnectionByUserId.ContainsKey(preAuth.UserId))
+                if (RemoteConnection.TryGet(preAuth.UserId, out RemoteConnection existingConnection))
                 {
-                    SiteLinkLogger.Info($"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");
+                    bool ownsLiveSession = SessionManager.Singleton.OwnsConnection(existingConnection);
 
-                    request.RejectWithReason(RequestWriter, RejectionReason.Error);
-                    return;
+                    bool canReplace = existingConnection.IsDisposed || existingConnection.IsSwitchingServers || !ownsLiveSession;
+
+                    if (!canReplace)
+                    {
+                        SiteLinkLogger.Info(
+                            $"{Tag} Rejected connection from (f=cyan){preAuth.UserId}(f=white) - already connected.");
+
+                        request.RejectWithReason(RequestWriter, RejectionReason.Error);
+                        return;
+                    }
+
+                    SiteLinkLogger.Info($"{Tag} Replacing stale connection for (f=cyan){preAuth.UserId}(f=white).");
+
+                    existingConnection.Peer?.Disconnect();
+                    existingConnection.Dispose();
                 }
 
                 ClientConnectingToListenerEvent ev = new ClientConnectingToListenerEvent(this, request, preAuth);
