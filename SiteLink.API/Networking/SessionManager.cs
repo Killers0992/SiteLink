@@ -358,12 +358,20 @@ namespace SiteLink.API.Networking
                 // final means no more servers to try
                 if (!resp.IsFinalResponse) return;
 
+                ClientConnectionResponseEvent ev =
+                    new ClientConnectionResponseEvent(
+                        connection,
+                        resp.Server,
+                        new ServerIsFullResponse());
+
+                EventManager.Client.InvokeConnectionResponse(ev);
+
+                if (ev.IsCancelled)
+                    return;
+
                 if (isPending)
                 {
-                    ClientConnectionResponseEvent ev = new ClientConnectionResponseEvent(connection, session.ConnectingToServer, new ServerIsFullResponse());
-                    EventManager.Client.InvokeConnectionResponse(ev);
-
-                    if (!ev.IsCancelled && !session.IsSilent)
+                    if (!session.IsSilent)
                     {
                         connection.AsServer.Hint(
                             FormatServerMessage(
@@ -373,8 +381,11 @@ namespace SiteLink.API.Networking
                             3f);
                     }
 
-                    // keep active, kill pending
-                    FailPending(connection.PreAuth.UserId, session, $"full");
+                    FailPending(
+                        connection.PreAuth.UserId,
+                        session,
+                        "full");
+
                     return;
                 }
 

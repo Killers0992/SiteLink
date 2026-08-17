@@ -23,6 +23,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+		<Version>2.1.2</Version>
 	</PropertyGroup>
 	
 	<ItemGroup Condition="'$(TargetFramework)' == 'net48'">
