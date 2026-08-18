@@ -1,11 +1,11 @@
-﻿using PlayerRoles;
-using RelativePositioning;
+﻿using RelativePositioning;
+using RoundRestarting;
 using SiteLink.API.Metrics;
 using SiteLink.API.Networking.Connections;
+using SiteLink.API.Testing;
 using SiteLink.API.Threading;
 using SiteLink.Core;
 using System.Buffers;
-using RoundRestarting;
 
 namespace SiteLink.API.Networking
 {
@@ -432,6 +432,20 @@ namespace SiteLink.API.Networking
 
         public void Connect(int challengeId = 0, byte[] challengeResponse = null)
         {
+            // USED FOR TESTING PURPOSES ONLY. DO NOT USE IN PRODUCTION.
+            if (ForcedServerFull.IsForcedFull(ConnectingToServer, UserId))
+            {
+                SiteLinkLogger.Info($"{Connection?.Tag} Simulating ServerFull for (f=yellow){ConnectingToServer.Name}(f=white).");
+
+                OnServerFull?.Invoke(new ServerFullResponse(ConnectingToServer, ConnectToServers.Count == 0));
+
+                ConnectingToServer = null;
+                Status = SessionStatus.None;
+
+                return;
+            }
+            // USED FOR TESTING PURPOSES ONLY. DO NOT USE IN PRODUCTION.
+
             Status = challengeId == 0 ? SessionStatus.Connecting : SessionStatus.PreAuthentication;
 
             IsConnectedToSimulated = false;
@@ -685,7 +699,7 @@ namespace SiteLink.API.Networking
             _shutdownRetryAttemptsMade = 0;
             _shutdownRetryInterval = TimeSpan.FromSeconds(Math.Max(0.1f, settings?.RestartRetryInterval ?? 3f));
 
-            _recoveryInitialDelay = 10f;
+            _recoveryInitialDelay = 3f;
 
             _nextShutdownRetry = DateTime.UtcNow.AddSeconds(_recoveryInitialDelay);
             _shutdownWaitingMessage = TranslationManager.For(this).Recovery.RestartWaiting;
